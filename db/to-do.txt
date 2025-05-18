@@ -1,0 +1,5 @@
+# Organizar o codigos SQL em pastas
+- tables
+- index
+- functions
+- sp...
