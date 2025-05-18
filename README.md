@@ -1,7 +1,8 @@
-# 📊 meuPortefólio
+<p align="center">
+  <img src="report/img/meu_portefolio_logo.png" alt="meuPortefólio Logo" width="150"/>
+</p>
 
-
-##  Descrição
+## meuPortefólio
 
 O meuPortefólio é um projeto acadêmico desenvolvido para a disciplina de Bases de Dados, focado na implementação de uma plataforma completa de gestão de investimentos com ênfase em Fractional Shares trading.
 

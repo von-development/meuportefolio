@@ -1,5 +1,9 @@
 # Índice
 
+<div align="center">
+  <img src="img/meu_portefolio_logo.png" alt="meuPortefólio Logo" width="200"/>
+</div>
+
 1. [Sumário Executivo](#sumario-executivo)
 2. [Introdução](#introducao)
    - [Visão Geral do Projeto](#visao-geral-do-projeto)
@@ -48,29 +52,16 @@ A plataforma permite que utilizadores criem contas, depositem fundos, gerenciem 
 
 ## Partes Interessadas
 
-Para gerar um diagrama visual das partes interessadas, utilize o seguinte prompt em uma ferramenta de geração de imagens:
+<div align="center">
+  <img src="img/stakeholders.png" alt="Stakeholders do meuPortefólio" width="600"/>
+</div>
 
-```prompt
-Crie uma imagem profissional no estilo infográfico mostrando os stakeholders de uma plataforma de investimentos chamada meuPortefólio. Inclua os seguintes elementos:
+Os principais stakeholders do projeto meuPortefólio incluem:
 
-Centro: Logo meuPortefólio (símbolo minimalista de um gráfico crescente em azul)
-
-Stakeholders principais em círculos conectados ao centro:
-1. Investidores (ícone de pessoa com gráfico)
-2. Corretora (ícone de prédio comercial)
-3. Equipe de Desenvolvimento (ícone de programador)
-4. Professores e Avaliadores (ícone de professor)
-5. Administradores do Sistema (ícone de engrenagens)
-
-Estilo:
-- Cores corporativas: azul, branco e cinza
-- Design minimalista e profissional
-- Linhas de conexão suaves
-- Ícones modernos e clean
-- Texto em português
-- Fundo branco
-```
-
-Este prompt pode ser usado em ferramentas como DALL-E, Midjourney ou similar para gerar uma visualização profissional dos stakeholders do projeto.
+1. **Investidores**: Utilizadores finais da plataforma que irão gerir seus investimentos
+2. **Corretora**: Responsável pela execução das ordens e custódia dos ativos
+3. **Equipe de Desenvolvimento**: Responsável pela implementação e manutenção do sistema
+4. **Professores e Avaliadores**: Supervisão e avaliação do projeto acadêmico
+5. **Administradores do Sistema**: Responsáveis pela gestão e monitoramento da plataforma
 
 ---
