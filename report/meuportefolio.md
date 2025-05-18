@@ -1,8 +1,22 @@
-# Índice
+# Base de Dados 2023/2024
 
-<div align="center">
-  <img src="img/meu_portefolio_logo.png" alt="meuPortefólio Logo" width="200"/>
-</div>
+<p align="center">
+  <img src="img/meu_portefolio_logo.png" alt="meuPortefólio Logo" width="150"/>
+</p>
+
+<h1 align="center">meuPortefólio</h1>
+
+<h3 align="center">Projeto de Base de Dados</h3>
+
+<p align="center">
+  <strong>Autores:</strong><br>
+  Victor<br>
+  Margarida
+</p>
+
+---
+
+# Índice
 
 1. [Sumário Executivo](#sumario-executivo)
 2. [Introdução](#introducao)
@@ -13,6 +27,10 @@
    - [Requisitos Funcionais](#requisitos-funcionais)
    - [Requisitos Não Funcionais](#requisitos-nao-funcionais)
    - [Requisitos de Dados](#requisitos-de-dados)
+4. [Design da Base de Dados](#design-da-base-de-dados)
+   - [Modelo de Dados Conceitual](#modelo-de-dados-conceitual)
+   - [Modelo de Dados Lógico](#modelo-de-dados-logico)
+   - [Modelo de Dados Físico](#modelo-de-dados-fisico)
 
 ---
 
@@ -52,9 +70,6 @@ A plataforma permite que utilizadores criem contas, depositem fundos, gerenciem 
 
 ## Partes Interessadas
 
-<div align="center">
-  <img src="img/stakeholders.png" alt="Stakeholders do meuPortefólio" width="600"/>
-</div>
 
 Os principais stakeholders do projeto meuPortefólio incluem:
 
@@ -64,4 +79,26 @@ Os principais stakeholders do projeto meuPortefólio incluem:
 4. **Professores e Avaliadores**: Supervisão e avaliação do projeto acadêmico
 5. **Administradores do Sistema**: Responsáveis pela gestão e monitoramento da plataforma
 
+<div align="center">
+  <img src="img/stakeholders.png" alt="Stakeholders do meuPortefólio" width="300"/>
+</div>
+
+
 ---
+
+# Análise de Requisitos
+
+## Requisitos Funcionais
+
+## Requisitos Não Funcionais
+
+## Requisitos de Dados
+
+# Design da Base de Dados
+
+## Modelo de Dados Conceitual
+
+<div align="center">
+  <img src="img/chen_diagram.png" alt="Diagrama ER (Chen)" width="600"/>
+</div>
+
