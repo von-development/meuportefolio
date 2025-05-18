@@ -33,6 +33,9 @@
    - [Modelo de Dados Físico](#modelo-de-dados-fisico)
 
 ---
+**TODO** Adcionar list de tables
+**TODO** Adcionar list de figuras
+---
 
 # Sumário Executivo
 
