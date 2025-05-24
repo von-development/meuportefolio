@@ -35,27 +35,11 @@ meuportefolio/
 ├── backend/                  # Backend application code
 ├── frontend/                 # Frontend application code
 ├── db/                       # Database scripts and configuration
-│   ├── connection/           # SQL Server connection/test scripts
-│   ├── functions/            # User-defined SQL functions
-│   ├── indexes/              # Index creation scripts
-│   ├── migrations/           # Migration scripts (full schema builds)
-│   ├── procedures/           # Stored procedures
-│   ├── schema/               # Table and view definitions
-│   ├── test/                 # Test and cleanup scripts
-│   ├── triggers/             # Triggers
-│   └── README.md             # Database documentation
-├── db/docker/                # Docker-specific database setup
-│   └── init/                 # Initialization SQL scripts for Docker container
-├── drawings/                 # Diagrams and design files
 ├── report/                   # Project reports and documentation
-├── docker-compose.yml        # Docker Compose configuration (root)
 ├── database_analysis.md      # Database analysis and design notes
 └── README.md                 # Project overview (this file)
 ```
 
-- **db/docker/init/**: Place a single combined SQL script here (e.g., `01_init.sql`) for automatic execution when the SQL Server Docker container starts.
-- **docker-compose.yml**: Orchestrates the SQL Server container and will be extended for backend/frontend integration.
 
-> **Note:** If you move or rename folders, update the `docker-compose.yml` volume path accordingly.
 
 
