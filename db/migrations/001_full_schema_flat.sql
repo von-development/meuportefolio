@@ -5,13 +5,13 @@ USE master;
 GO
 
 -- Create database if it doesn't exist
-IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'meuPortfolio')
+IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'meuportefolio')
 BEGIN
-    CREATE DATABASE meuPortfolio;
+    CREATE DATABASE meuportefolio;
 END
 GO
 
-USE meuPortfolio;
+USE meuportefolio;
 GO
 
 -- Create schema if it doesn't exist
