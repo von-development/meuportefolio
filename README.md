@@ -20,25 +20,12 @@ Desenvolver uma base de dados robusta e eficiente que suporte uma plataforma de 
 - Interface intuitiva para gestão de investimentos
 - Sistema de subscrição com planos Basic e Premium
 
-###  Tecnologias (WIP)
+###  Tecnologias 
 - Microsoft SQL Server Management Studio
 - Base de Dados SQL Server
+- Rust
 
-# meuPortfolio Project Structure
 
-This project is organized for full-stack development with backend, frontend, and database components, including Docker support for local development.
-
-## Project Structure
-
-```
-meuportefolio/
-├── backend/                  # Backend application code
-├── frontend/                 # Frontend application code
-├── db/                       # Database scripts and configuration
-├── report/                   # Project reports and documentation
-├── database_analysis.md      # Database analysis and design notes
-└── README.md                 # Project overview (this file)
-```
 
 
 
