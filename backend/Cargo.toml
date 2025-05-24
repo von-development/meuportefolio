@@ -1,0 +1,15 @@
+[package]
+name = "backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7.0"
+tokio = { version = "1", features = ["full"] }
+tiberius = { version = "0.12", features = ["tds73", "chrono"], default-features = false }
+tokio-util = { version = "0.7", features = ["compat"] }
+serde = { version = "1", features = ["derive"] }
+dotenvy = "0.15"
+jsonwebtoken = "9"
+argon2 = "0.5"
+anyhow = "1.0"  # For error handling
