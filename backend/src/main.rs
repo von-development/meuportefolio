@@ -1,9 +1,11 @@
 use axum::{Router, routing::get, Json};
-use tiberius::{Client, Config, AuthMethod, Row};
+use tiberius::{Client, Config, AuthMethod};
 use tokio::net::TcpStream;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 use serde::Serialize;
 use anyhow::Result;
+use tiberius::time::chrono;
+use futures_util::TryStreamExt;
 
 #[derive(Serialize)]
 pub struct Asset {
@@ -63,22 +65,27 @@ async fn list_assets() -> Result<Json<Vec<Asset>>, (axum::http::StatusCode, Stri
     let mut client = Client::connect(config, tcp).await.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("DB client error: {}", e)))?;
 
     let query = "SELECT AssetID, Name, Symbol, AssetType, Price, Volume, AvailableShares, LastUpdated FROM portfolio.Assets";
-    let mut stream = client.query(query, &[]).await.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?;
-    let mut assets = Vec::new();
-    while let Some(row) = stream.try_next().await.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Row error: {}", e)))? {
-        assets.push(Asset {
-            asset_id: row.get::<i32, _>("AssetID").unwrap_or_default(),
-            name: row.get::<&str, _>("Name").unwrap_or("").to_string(),
-            symbol: row.get::<&str, _>("Symbol").unwrap_or("").to_string(),
-            asset_type: row.get::<&str, _>("AssetType").unwrap_or("").to_string(),
-            price: row.get::<f64, _>("Price").unwrap_or_default(),
-            volume: row.get::<i64, _>("Volume").unwrap_or_default(),
-            available_shares: row.get::<f64, _>("AvailableShares").unwrap_or_default(),
-            last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
-                .map(|dt| dt.to_string())
-                .unwrap_or_default(),
-        });
-    }
+    let stream = client.query(query, &[]).await.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?;
+    
+    let rows = stream.into_first_result().await.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Row error: {}", e)))?;
+    
+    let assets = rows.into_iter().map(|row| Asset {
+        asset_id: row.get("AssetID").unwrap_or_default(),
+        name: row.get::<&str, _>("Name").unwrap_or("").to_string(),
+        symbol: row.get::<&str, _>("Symbol").unwrap_or("").to_string(),
+        asset_type: row.get::<&str, _>("AssetType").unwrap_or("").to_string(),
+        price: row.get::<tiberius::numeric::Numeric, _>("Price")
+            .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+            .unwrap_or_default(),
+        volume: row.get::<i64, _>("Volume").unwrap_or_default(),
+        available_shares: row.get::<tiberius::numeric::Numeric, _>("AvailableShares")
+            .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+            .unwrap_or_default(),
+        last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
+            .map(|dt| dt.to_string())
+            .unwrap_or_default(),
+    }).collect();
+
     Ok(Json(assets))
 }
 
