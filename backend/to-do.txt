@@ -1,8 +1,0 @@
-# Definir qual o backend
-- Python
-- Rust
-- C#
-
-Fazer conexao com o SQL server studio management
-Fazer os metodos de rest api com a backend
-
