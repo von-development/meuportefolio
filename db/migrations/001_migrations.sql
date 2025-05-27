@@ -58,7 +58,7 @@ GO
 ============================================================ */
 
 CREATE TABLE portfolio.Users (
-    UserID INT IDENTITY (1, 1) PRIMARY KEY,
+    UserID UNIQUEIDENTIFIER DEFAULT NEWID() PRIMARY KEY,
     Name NVARCHAR (100) NOT NULL,
     Email NVARCHAR (100) NOT NULL UNIQUE,
     -- store a bcrypt/argon2 hash, never raw text
@@ -75,7 +75,7 @@ GO
 
 CREATE TABLE portfolio.Portfolios (
     PortfolioID INT IDENTITY (1, 1) PRIMARY KEY,
-    UserID INT NOT NULL REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
+    UserID UNIQUEIDENTIFIER NOT NULL REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
     Name NVARCHAR (100) NOT NULL,
     CreationDate DATETIME NOT NULL DEFAULT SYSDATETIME (),
     CurrentFunds DECIMAL(18, 2) NOT NULL DEFAULT 0,
@@ -133,7 +133,7 @@ GO
 
 CREATE TABLE portfolio.Transactions (
     TransactionID BIGINT IDENTITY (1, 1) PRIMARY KEY,
-    UserID INT NOT NULL REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
+    UserID UNIQUEIDENTIFIER NOT NULL REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
     PortfolioID INT NOT NULL REFERENCES portfolio.Portfolios (PortfolioID), -- removed ON DELETE CASCADE to avoid multiple cascade paths
     AssetID INT NOT NULL REFERENCES portfolio.Assets (AssetID),
     TransactionType NVARCHAR (10) NOT NULL CHECK (
@@ -149,7 +149,7 @@ GO
 
 CREATE TABLE portfolio.Subscriptions (
     SubscriptionID INT IDENTITY (1, 1) PRIMARY KEY,
-    UserID INT NOT NULL UNIQUE REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
+    UserID UNIQUEIDENTIFIER NOT NULL UNIQUE REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
     StartDate DATETIME NOT NULL,
     EndDate DATETIME NOT NULL,
     AmountPaid DECIMAL(18, 2) NOT NULL
@@ -158,7 +158,7 @@ GO
 
 CREATE TABLE portfolio.RiskMetrics (
     MetricID INT IDENTITY (1, 1) PRIMARY KEY,
-    UserID INT NOT NULL REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
+    UserID UNIQUEIDENTIFIER NOT NULL REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
     MaximumDrawdown DECIMAL(10, 2),
     Beta DECIMAL(10, 2),
     SharpeRatio DECIMAL(10, 2),
@@ -169,7 +169,7 @@ GO
 
 CREATE TABLE portfolio.PaymentMethods (
     PaymentMethodID INT IDENTITY (1, 1) PRIMARY KEY,
-    UserID INT NOT NULL REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
+    UserID UNIQUEIDENTIFIER NOT NULL REFERENCES portfolio.Users (UserID) ON DELETE CASCADE,
     MethodType NVARCHAR (50),
     Details NVARCHAR (255)
 );
@@ -333,16 +333,19 @@ CREATE OR ALTER PROCEDURE portfolio.sp_CreateUser
     @UserType NVARCHAR(20)
 AS
 BEGIN
-    INSERT INTO portfolio.Users
-           (Name, Email, PasswordHash, CountryOfResidence, IBAN, UserType)
-    VALUES (@Name,@Email,@PasswordHash,@CountryOfResidence,@IBAN,@UserType);
+    DECLARE @UserID UNIQUEIDENTIFIER;
+    SET @UserID = NEWID();
 
-    SELECT SCOPE_IDENTITY() AS UserID;
+    INSERT INTO portfolio.Users
+           (UserID, Name, Email, PasswordHash, CountryOfResidence, IBAN, UserType)
+    VALUES (@UserID, @Name, @Email, @PasswordHash, @CountryOfResidence, @IBAN, @UserType);
+
+    SELECT @UserID AS UserID;
 END;
 GO
 
 CREATE OR ALTER PROCEDURE portfolio.sp_CreatePortfolio
-    @UserID INT,
+    @UserID UNIQUEIDENTIFIER,
     @Name   NVARCHAR(100)
 AS
 BEGIN
@@ -354,7 +357,7 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE portfolio.sp_ExecuteTransaction
-    @UserID          INT,
+    @UserID          UNIQUEIDENTIFIER,
     @PortfolioID     INT,
     @AssetID         INT,
     @TransactionType NVARCHAR(10),
