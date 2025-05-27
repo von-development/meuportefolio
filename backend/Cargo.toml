@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.7.0"
+axum = "0.8.4"
 tokio = { version = "1", features = ["full"] }
 tiberius = { version = "0.12", features = ["tds73", "chrono"], default-features = false }
 tokio-util = { version = "0.7", features = ["compat"] }
@@ -15,7 +15,7 @@ jsonwebtoken = "9"
 argon2 = "0.5"
 anyhow = "1.0"  # For error handling
 futures-util = "0.3"
-utoipa = { version = "4.1", features = ["axum_extras"] }
-utoipa-swagger-ui = { version = "5.0", features = ["axum"] }
-tower-http = { version = "0.5", features = ["cors"] }
+utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+tower-http = { version = "0.6.4", features = ["cors"] }
 uuid = { version = "1.7", features = ["serde", "v4"] }

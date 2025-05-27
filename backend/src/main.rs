@@ -56,17 +56,18 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(Any);
     
     let app = Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/swagger-ui")
+            .url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/health", get(handlers::health_check))
         .route("/db-health", get(handlers::db_health_check))
-        .route("/assets", get(handlers::list_assets))
         .route("/users", get(handlers::list_users))
         .route("/users", post(handlers::create_user))
-        .route("/users/:id", get(handlers::get_user))
-        .route("/users/:id", put(handlers::update_user))
-        .route("/users/:id", delete(handlers::delete_user))
         .route("/users/login", post(handlers::login))
         .route("/users/logout", post(handlers::logout))
+        .route("/users/{id}", get(handlers::get_user))
+        .route("/users/{id}", put(handlers::update_user))
+        .route("/users/{id}", delete(handlers::delete_user))
+        .route("/assets", get(handlers::list_assets))
         .layer(cors);
 
     // Start the server
