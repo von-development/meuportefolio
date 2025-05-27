@@ -20,7 +20,14 @@ use tower_http::cors::{CorsLayer, Any};
         handlers::update_user,
         handlers::delete_user,
         handlers::login,
-        handlers::logout
+        handlers::logout,
+        handlers::list_portfolios,
+        handlers::create_portfolio,
+        handlers::get_portfolio,
+        handlers::update_portfolio,
+        handlers::delete_portfolio,
+        handlers::get_portfolio_summary,
+        handlers::get_portfolio_holdings
     ),
     components(
         schemas(
@@ -29,13 +36,19 @@ use tower_http::cors::{CorsLayer, Any};
             models::CreateUserRequest,
             models::UpdateUserRequest,
             models::LoginRequest,
-            models::LoginResponse
+            models::LoginResponse,
+            models::Portfolio,
+            models::CreatePortfolioRequest,
+            models::UpdatePortfolioRequest,
+            models::PortfolioSummary,
+            models::AssetHolding
         )
     ),
     tags(
         (name = "health", description = "Health check endpoints"),
         (name = "users", description = "User management endpoints"),
-        (name = "assets", description = "Asset management endpoints")
+        (name = "assets", description = "Asset management endpoints"),
+        (name = "portfolios", description = "Portfolio management endpoints")
     ),
     info(
         title = "Portfolio API",
@@ -67,6 +80,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/users/{id}", get(handlers::get_user))
         .route("/users/{id}", put(handlers::update_user))
         .route("/users/{id}", delete(handlers::delete_user))
+        .route("/portfolios", get(handlers::list_portfolios))
+        .route("/portfolios", post(handlers::create_portfolio))
+        .route("/portfolios/{id}", get(handlers::get_portfolio))
+        .route("/portfolios/{id}", put(handlers::update_portfolio))
+        .route("/portfolios/{id}", delete(handlers::delete_portfolio))
+        .route("/portfolios/{id}/summary", get(handlers::get_portfolio_summary))
+        .route("/portfolios/{id}/holdings", get(handlers::get_portfolio_holdings))
         .route("/assets", get(handlers::list_assets))
         .layer(cors);
 
