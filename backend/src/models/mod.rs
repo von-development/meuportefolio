@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+mod portfolio;
+pub use portfolio::*;
+
 #[derive(Serialize, ToSchema)]
 pub struct Asset {
     pub asset_id: i32,
