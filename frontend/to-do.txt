@@ -1,3 +1,0 @@
-Definir frontend e estutura de vizualiacao 
-- react ou visualstudio
-- definir views, etc..
