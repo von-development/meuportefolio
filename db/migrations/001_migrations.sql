@@ -2,6 +2,33 @@
 meuPortfolio – full schema  (v2025-05-24)
 ------------------------------------------------------------
 Tested on SQL Server 2022.
+
+DIFERENÇAS ENTRE 001_migrations.sql E 001_tables.sql:
+
+1. Estrutura:
+   - Este arquivo (001_migrations.sql) inclui drops de objetos existentes
+   - Este arquivo inclui procedures, functions, triggers e views
+   - 001_tables.sql contém apenas criação de tabelas e índices
+
+2. Campos Adicionais em 001_tables.sql:
+   - PaymentMethods: IsDefault, LastUsed, Status, ValidationDate, CreatedAt, UpdatedAt
+   - Subscriptions: PaymentStatus, CreatedAt, UpdatedAt
+   - CompanyDetails: MarketCap, EmployeeCount, YearFounded, LastUpdated
+   - IndexDetails: Region, Methodology, NumberOfComponents, RebalanceFrequency, BaseValue, BaseDate
+   - AssetPrices: OpenPrice, HighPrice, LowPrice
+   - Transactions: Status
+   - RiskMetrics: VolatilityScore, RiskLevel
+
+3. Constraints:
+   - 001_tables.sql tem mais campos NOT NULL
+   - 001_tables.sql tem mais valores DEFAULT
+   - 001_tables.sql tem mais CHECK constraints
+
+4. Organização:
+   - 001_tables.sql está organizado em seções lógicas mais claras
+   - 001_tables.sql não tem procedures, functions ou triggers
+   - 001_tables.sql tem todos os índices agrupados no final
+
 ------------------------------------------------------------ */
 
 USE master;

@@ -1,41 +1,110 @@
--- meuPortfolio Seed Data Script
--- Run this after the schema is created to populate the database with sample data
+/* ------------------------------------------------------------
+meuPortfolio – Seed Data (v2024-03-21)
+------------------------------------------------------------ */
 
 USE meuportefolio;
 GO
 
--- Users
-DECLARE @AliceID UNIQUEIDENTIFIER = '7d1d74f3-5b5d-4bf9-9c9d-9c9d9c9d9c9d';
-DECLARE @BobID UNIQUEIDENTIFIER = '8e2e85f4-6c6e-5cf0-0d0e-0d0e0d0e0d0e';
-DECLARE @CarlosID UNIQUEIDENTIFIER = '9f3f96f5-7d7f-6df1-1e1f-1e1f1e1f1e1f';
-DECLARE @DianaID UNIQUEIDENTIFIER = 'a04fa7f6-8e8f-7ef2-2f2f-2f2f2f2f2f2f';
-DECLARE @EvaID UNIQUEIDENTIFIER = 'b15fb8f7-9f9f-8ff3-3f3f-3f3f3f3f3f3f';
+/* ============================================================
+1. Sample Users
+============================================================ */
+INSERT INTO portfolio.Users (Name, Email, PasswordHash, CountryOfResidence, IBAN, UserType)
+VALUES 
+    ('João Silva', 'joao.silva@email.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4tbQU.Tvt6', 'Brasil', 'BR9876543210987654321098765', 'Premium'),
+    ('Maria Santos', 'maria.santos@email.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4tbQU.Tvt6', 'Portugal', 'PT9876543210987654321098765', 'Basic');
 
-INSERT INTO portfolio.Users (UserID, Name, Email, PasswordHash, CountryOfResidence, IBAN, UserType)
-VALUES
-(@AliceID, 'Alice Smith', 'alice@example.com', '$argon2id$v=19$m=4096,t=3,p=1$abc$xyz', 'Portugal', 'PT50000201231234567890154', 'Premium'),
-(@BobID, 'Bob Johnson', 'bob@example.com', '$argon2id$v=19$m=4096,t=3,p=1$def$uvw', 'Spain', 'ES9121000418450200051332', 'Basic'),
-(@CarlosID, 'Carlos Silva', 'carlos@example.com', '$argon2id$v=19$m=4096,t=3,p=1$ghi$rst', 'Brazil', 'BR1500000000000010932840814P2', 'Premium'),
-(@DianaID, 'Diana Costa', 'diana@example.com', '$argon2id$v=19$m=4096,t=3,p=1$jkl$opq', 'France', 'FR7630006000011234567890189', 'Basic'),
-(@EvaID, 'Eva Müller', 'eva@example.com', '$argon2id$v=19$m=4096,t=3,p=1$mno$lmn', 'Germany', 'DE89370400440532013000', 'Premium');
-GO
+/* ============================================================
+2. Sample Assets (Top Tech Companies)
+============================================================ */
+INSERT INTO portfolio.Assets (Symbol, Name, AssetType, Currency)
+VALUES 
+    ('AAPL', 'Apple Inc.', 'Stock', 'USD'),
+    ('MSFT', 'Microsoft Corporation', 'Stock', 'USD'),
+    ('GOOGL', 'Alphabet Inc.', 'Stock', 'USD'),
+    ('AMZN', 'Amazon.com Inc.', 'Stock', 'USD'),
+    ('NVDA', 'NVIDIA Corporation', 'Stock', 'USD');
 
--- Portfolios
-DECLARE @AliceID UNIQUEIDENTIFIER = '7d1d74f3-5b5d-4bf9-9c9d-9c9d9c9d9c9d';
-DECLARE @BobID UNIQUEIDENTIFIER = '8e2e85f4-6c6e-5cf0-0d0e-0d0e0d0e0d0e';
-DECLARE @CarlosID UNIQUEIDENTIFIER = '9f3f96f5-7d7f-6df1-1e1f-1e1f1e1f1e1f';
-DECLARE @DianaID UNIQUEIDENTIFIER = 'a04fa7f6-8e8f-7ef2-2f2f-2f2f2f2f2f2f';
-DECLARE @EvaID UNIQUEIDENTIFIER = 'b15fb8f7-9f9f-8ff3-3f3f-3f3f3f3f3f3f';
+/* ============================================================
+3. Current Asset Prices
+============================================================ */
+INSERT INTO portfolio.AssetPrices (AssetID, Price, PriceDate)
+SELECT 
+    a.AssetID,
+    CASE 
+        WHEN a.Symbol = 'AAPL' THEN 172.62
+        WHEN a.Symbol = 'MSFT' THEN 425.22
+        WHEN a.Symbol = 'GOOGL' THEN 147.60
+        WHEN a.Symbol = 'AMZN' THEN 178.15
+        WHEN a.Symbol = 'NVDA' THEN 878.35
+    END as Price,
+    GETDATE() as PriceDate
+FROM portfolio.Assets a;
 
-INSERT INTO portfolio.Portfolios (UserID, Name)
-VALUES
-(@AliceID, 'Alice Growth'),
-(@AliceID, 'Alice Crypto'),
-(@BobID, 'Bob Retirement'),
-(@CarlosID, 'Carlos Main'),
-(@DianaID, 'Diana Index'),
-(@EvaID, 'Eva Wealth');
-GO
+/* ============================================================
+4. Sample Portfolios
+============================================================ */
+INSERT INTO portfolio.Portfolios (UserID, Name, Description)
+SELECT 
+    u.UserID,
+    'Portfólio Principal',
+    'Portfólio de investimentos em tecnologia'
+FROM portfolio.Users u
+WHERE u.Email = 'joao.silva@email.com';
+
+INSERT INTO portfolio.Portfolios (UserID, Name, Description)
+SELECT 
+    u.UserID,
+    'Meus Investimentos',
+    'Carteira diversificada'
+FROM portfolio.Users u
+WHERE u.Email = 'maria.santos@email.com';
+
+/* ============================================================
+5. Sample Transactions
+============================================================ */
+-- João's transactions
+INSERT INTO portfolio.Transactions (PortfolioID, AssetID, TransactionType, Quantity, Price, TransactionDate)
+SELECT 
+    p.PortfolioID,
+    a.AssetID,
+    'Buy',
+    10,
+    165.50,
+    DATEADD(day, -30, GETDATE())
+FROM portfolio.Portfolios p
+JOIN portfolio.Users u ON p.UserID = u.UserID
+CROSS JOIN portfolio.Assets a
+WHERE u.Email = 'joao.silva@email.com'
+AND a.Symbol = 'AAPL';
+
+INSERT INTO portfolio.Transactions (PortfolioID, AssetID, TransactionType, Quantity, Price, TransactionDate)
+SELECT 
+    p.PortfolioID,
+    a.AssetID,
+    'Buy',
+    5,
+    410.25,
+    DATEADD(day, -15, GETDATE())
+FROM portfolio.Portfolios p
+JOIN portfolio.Users u ON p.UserID = u.UserID
+CROSS JOIN portfolio.Assets a
+WHERE u.Email = 'joao.silva@email.com'
+AND a.Symbol = 'MSFT';
+
+-- Maria's transactions
+INSERT INTO portfolio.Transactions (PortfolioID, AssetID, TransactionType, Quantity, Price, TransactionDate)
+SELECT 
+    p.PortfolioID,
+    a.AssetID,
+    'Buy',
+    2,
+    850.75,
+    DATEADD(day, -20, GETDATE())
+FROM portfolio.Portfolios p
+JOIN portfolio.Users u ON p.UserID = u.UserID
+CROSS JOIN portfolio.Assets a
+WHERE u.Email = 'maria.santos@email.com'
+AND a.Symbol = 'NVDA';
 
 -- Assets
 INSERT INTO portfolio.Assets (Name, Symbol, AssetType, Price, Volume, AvailableShares)
