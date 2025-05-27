@@ -9,8 +9,13 @@ tokio = { version = "1", features = ["full"] }
 tiberius = { version = "0.12", features = ["tds73", "chrono"], default-features = false }
 tokio-util = { version = "0.7", features = ["compat"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1.0"
 dotenvy = "0.15"
 jsonwebtoken = "9"
 argon2 = "0.5"
 anyhow = "1.0"  # For error handling
 futures-util = "0.3"
+utoipa = { version = "4.1", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "5.0", features = ["axum"] }
+tower-http = { version = "0.5", features = ["cors"] }
+uuid = { version = "1.7", features = ["serde", "v4"] }
