@@ -1,18 +1,39 @@
 'use client';
 
-import { Portfolio } from "@/lib/api";
+import { Portfolio, api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusIcon, TrendingUpIcon, TrendingDownIcon, BarChart3Icon } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface UserPortfoliosProps {
   portfolios: Portfolio[];
-  onCreatePortfolio?: () => void;
+  userId: string;
 }
 
-export function UserPortfolios({ portfolios, onCreatePortfolio }: UserPortfoliosProps) {
+export function UserPortfolios({ portfolios: initialPortfolios, userId }: UserPortfoliosProps) {
+  const [portfolios, setPortfolios] = useState(initialPortfolios);
+  const router = useRouter();
+
+  const handleCreatePortfolio = async () => {
+    try {
+      const newPortfolio = await api.createPortfolio(userId, {
+        name: `Portfolio ${portfolios.length + 1}`,
+        user_id: userId,
+      });
+      setPortfolios(prev => [...prev, newPortfolio]);
+      toast.success("Portfólio criado com sucesso!");
+      router.refresh();
+    } catch (error) {
+      console.error('Error creating portfolio:', error);
+      toast.error("Não foi possível criar o portfólio. Tente novamente.");
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -28,12 +49,10 @@ export function UserPortfolios({ portfolios, onCreatePortfolio }: UserPortfolios
         <p className="text-sm text-muted-foreground mb-4">
           Este usuário ainda não possui nenhum portfólio.
         </p>
-        {onCreatePortfolio && (
-          <Button onClick={onCreatePortfolio} className="bg-blue-600 hover:bg-blue-700">
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Criar Primeiro Portfólio
-          </Button>
-        )}
+        <Button onClick={handleCreatePortfolio} className="bg-blue-600 hover:bg-blue-700">
+          <PlusIcon className="h-4 w-4 mr-2" />
+          Criar Primeiro Portfólio
+        </Button>
       </div>
     );
   }
@@ -41,12 +60,10 @@ export function UserPortfolios({ portfolios, onCreatePortfolio }: UserPortfolios
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
-        {onCreatePortfolio && (
-          <Button onClick={onCreatePortfolio} className="bg-blue-600 hover:bg-blue-700">
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Novo Portfólio
-          </Button>
-        )}
+        <Button onClick={handleCreatePortfolio} className="bg-blue-600 hover:bg-blue-700">
+          <PlusIcon className="h-4 w-4 mr-2" />
+          Novo Portfólio
+        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -63,7 +80,7 @@ export function UserPortfolios({ portfolios, onCreatePortfolio }: UserPortfolios
                   )}
                 </div>
                 
-                <div className="space-y-4">
+                <div>
                   <div className="flex justify-between items-center pb-2 border-b border-border/50">
                     <span className="text-sm text-muted-foreground">Saldo Atual</span>
                     <span className="font-medium">{formatCurrency(portfolio.current_funds)}</span>

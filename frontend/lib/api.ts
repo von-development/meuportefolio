@@ -57,8 +57,10 @@ export interface SignupRequest {
     iban: string;
 }
 
+import { API_CONFIG } from './config';
+
 // API Configuration
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+const API_BASE = API_CONFIG.BASE_URL;
 
 // Custom error class for API errors
 export class APIError extends Error {
@@ -74,7 +76,7 @@ export class APIError extends Error {
 // Helper function to check if the server is available
 async function checkServer(): Promise<boolean> {
     try {
-        const response = await fetch('http://localhost:8080/health');
+        const response = await fetch(API_CONFIG.HEALTH_URL);
         return response.ok;
     } catch {
         return false;
