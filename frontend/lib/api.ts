@@ -10,6 +10,14 @@ export interface Asset {
     last_updated: string;
 }
 
+export interface AssetPriceHistory {
+    asset_id: number;
+    symbol: string;
+    price: number;
+    volume: number;
+    timestamp: string;
+}
+
 export interface User {
     user_id: string;
     name: string;
@@ -166,6 +174,10 @@ export const api = {
 
     getAssetDetails: async (id: number): Promise<Asset> => {
         return makeRequest<Asset>(`${API_BASE}/assets/${id}`);
+    },
+
+    getAssetPriceHistory: async (id: number): Promise<AssetPriceHistory[]> => {
+        return makeRequest<AssetPriceHistory[]>(`${API_BASE}/assets/${id}/price-history`);
     },
 
     // Users

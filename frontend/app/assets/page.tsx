@@ -36,6 +36,9 @@ function AssetsLoading() {
   );
 }
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function AssetsPage() {
   return (
     <Suspense fallback={<AssetsLoading />}>
@@ -45,17 +48,23 @@ export default async function AssetsPage() {
 }
 
 async function AssetsContent() {
-  const assets = await api.getAssets();
+  try {
+    const assets = await api.getAssets();
 
-  // Group assets by type for better organization
-  const groupedAssets = assets.reduce((acc, asset) => {
-    const type = asset.asset_type;
-    if (!acc[type]) {
-      acc[type] = [];
-    }
-    acc[type].push(asset);
-    return acc;
-  }, {} as Record<string, typeof assets>);
+    // Group assets by type for better organization
+    const groupedAssets = assets.reduce((acc, asset) => {
+      const type = asset.asset_type;
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(asset);
+      return acc;
+    }, {} as Record<string, typeof assets>);
 
-  return <AssetsClient assets={assets} groupedAssets={groupedAssets} />;
+    return <AssetsClient assets={assets} groupedAssets={groupedAssets} />;
+  } catch (error) {
+    console.error('Error fetching assets:', error);
+    // Return empty data during build
+    return <AssetsClient assets={[]} groupedAssets={{}} />;
+  }
 } 

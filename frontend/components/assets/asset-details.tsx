@@ -193,7 +193,7 @@ export function AssetDetails({ asset, priceHistory }: AssetDetailsProps) {
                     width={80}
                   />
                   <Tooltip 
-                    formatter={(value: any) => [formatUSD(value), "Preço"]}
+                    formatter={(value: number) => [formatUSD(value), "Preço"]}
                     labelFormatter={(label) => `Data: ${label}`}
                   />
                   <Area

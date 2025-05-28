@@ -6,6 +6,8 @@ import { AssetCard } from "./asset-card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface AssetsClientProps {
   assets: Asset[];
@@ -15,6 +17,11 @@ interface AssetsClientProps {
 export function AssetsClient({ assets, groupedAssets }: AssetsClientProps) {
   const [search, setSearch] = React.useState("");
   const [selectedTab, setSelectedTab] = React.useState("all");
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Get unique asset types and sort them
   const assetTypes = ["all", ...Object.keys(groupedAssets)].map(type => ({
@@ -47,6 +54,38 @@ export function AssetsClient({ assets, groupedAssets }: AssetsClientProps) {
 
     return filtered;
   }, [assets, search, selectedTab]);
+
+  if (!isClient) {
+    return (
+      <div className="container mx-auto py-10">
+        <div className="flex flex-col space-y-4">
+          <div className="flex justify-between items-center">
+            <div className="h-9 w-32">
+              <Skeleton className="h-9 w-32" />
+            </div>
+            <div className="h-9 w-32">
+              <Skeleton className="h-9 w-32" />
+            </div>
+          </div>
+
+          <div className="flex gap-4 items-center">
+            <div className="flex-1">
+              <Skeleton className="h-10 w-[384px]" />
+            </div>
+            <Skeleton className="h-10 w-[180px]" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="space-y-4">
+                <Skeleton className="h-[200px] w-full rounded-xl" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-10 space-y-8">
@@ -92,7 +131,9 @@ export function AssetsClient({ assets, groupedAssets }: AssetsClientProps) {
             ) : (
               <div className="text-center py-10">
                 <p className="text-muted-foreground">
-                  Nenhum ativo encontrado com os filtros selecionados.
+                  {assets.length === 0 
+                    ? "Carregando ativos..." 
+                    : "Nenhum ativo encontrado com os filtros selecionados."}
                 </p>
               </div>
             )}

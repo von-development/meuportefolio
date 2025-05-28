@@ -13,18 +13,25 @@ export function formatDate(date: string) {
   });
 }
 
-export function formatCurrency(value: number) {
+export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
 }
 
-export function formatNumber(value: number) {
+export function formatUSD(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(value);
+}
+
+export function formatNumber(value: number): string {
   return new Intl.NumberFormat('pt-BR').format(value);
 }
 
-export function formatPercentage(value: number) {
+export function formatPercentage(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'percent',
     minimumFractionDigits: 2,
