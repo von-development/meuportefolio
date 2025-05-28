@@ -17,6 +17,15 @@ pub struct Asset {
     pub last_updated: String,
 }
 
+#[derive(Serialize, ToSchema)]
+pub struct AssetPriceHistory {
+    pub asset_id: i32,
+    pub symbol: String,
+    pub price: f64,
+    pub volume: i64,
+    pub timestamp: String,
+}
+
 /// Represents a user in the system
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct User {

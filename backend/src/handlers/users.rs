@@ -12,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// List all users
 #[utoipa::path(
     get,
-    path = "/users",
+    path = "/api/v1/users",
     tag = "users",
     responses(
         (status = 200, description = "List of users retrieved successfully", body = Vec<User>),
@@ -55,7 +55,7 @@ pub async fn list_users() -> Result<Json<Vec<User>>, (StatusCode, String)> {
 /// Get a specific user by ID
 #[utoipa::path(
     get,
-    path = "/users/{user_id}",
+    path = "/api/v1/users/{user_id}",
     tag = "users",
     params(
         ("user_id" = String, Path, description = "User ID to fetch")
@@ -102,7 +102,7 @@ pub async fn get_user(Path(user_id): Path<Uuid>) -> Result<Json<User>, (StatusCo
 /// Create a new user
 #[utoipa::path(
     post,
-    path = "/users",
+    path = "/api/v1/users",
     tag = "users",
     request_body = CreateUserRequest,
     responses(
@@ -160,7 +160,7 @@ pub async fn create_user(Json(user): Json<CreateUserRequest>) -> Result<Json<Use
 /// Update a user
 #[utoipa::path(
     put,
-    path = "/users/{user_id}",
+    path = "/api/v1/users/{user_id}",
     tag = "users",
     request_body = UpdateUserRequest,
     params(
@@ -287,7 +287,7 @@ pub async fn update_user(Path(user_id): Path<Uuid>, Json(update): Json<UpdateUse
 /// Delete a user
 #[utoipa::path(
     delete,
-    path = "/users/{user_id}",
+    path = "/api/v1/users/{user_id}",
     tag = "users",
     params(
         ("user_id" = String, Path, description = "User ID to delete")
@@ -333,7 +333,7 @@ pub async fn delete_user(Path(user_id): Path<Uuid>) -> Result<StatusCode, (Statu
 /// User login
 #[utoipa::path(
     post,
-    path = "/users/login",
+    path = "/api/v1/users/login",
     tag = "users",
     request_body = LoginRequest,
     responses(
@@ -415,7 +415,7 @@ pub async fn login(Json(login): Json<LoginRequest>) -> Result<Response<String>, 
 /// User logout
 #[utoipa::path(
     post,
-    path = "/users/logout",
+    path = "/api/v1/users/logout",
     tag = "users",
     responses(
         (status = 200, description = "Logout successful"),
