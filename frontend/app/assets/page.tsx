@@ -1,70 +1,36 @@
-import { Suspense } from "react";
-import { api } from "@/lib/api";
-import { AssetsClient } from "@/components/assets/assets-client";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Suspense } from 'react';
+import { AssetsList } from '@/components/assets/assets-list';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Loading skeleton for assets
-function AssetsLoading() {
+export default function AssetsPage() {
   return (
-    <div className="container mx-auto py-10">
-      <div className="flex flex-col space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="h-9 w-32">
-            <Skeleton className="h-9 w-32" />
-          </div>
-          <div className="h-9 w-32">
-            <Skeleton className="h-9 w-32" />
+    <div className="min-h-screen bg-slate-900">
+      <div className="container mx-auto py-8 px-4 space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Ativos Disponíveis</h1>
+            <p className="text-slate-400 mt-2">
+              Explore e analise todos os ativos disponíveis para investimento
+            </p>
           </div>
         </div>
 
-        <div className="flex gap-4 items-center">
-          <div className="flex-1">
-            <Skeleton className="h-10 w-[384px]" />
-          </div>
-          <Skeleton className="h-10 w-[180px]" />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="space-y-4">
-              <Skeleton className="h-[200px] w-full rounded-xl" />
-            </div>
-          ))}
-        </div>
+        {/* Assets List */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white">Mercado de Ativos</CardTitle>
+            <CardDescription className="text-slate-400">
+              Visualize e pesquise todos os ativos disponíveis na plataforma
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Suspense fallback={<div className="text-slate-300">Carregando ativos...</div>}>
+              <AssetsList />
+            </Suspense>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
-}
-
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-export default async function AssetsPage() {
-  return (
-    <Suspense fallback={<AssetsLoading />}>
-      <AssetsContent />
-    </Suspense>
-  );
-}
-
-async function AssetsContent() {
-  try {
-    const assets = await api.getAssets();
-
-    // Group assets by type for better organization
-    const groupedAssets = assets.reduce((acc, asset) => {
-      const type = asset.asset_type;
-      if (!acc[type]) {
-        acc[type] = [];
-      }
-      acc[type].push(asset);
-      return acc;
-    }, {} as Record<string, typeof assets>);
-
-    return <AssetsClient assets={assets} groupedAssets={groupedAssets} />;
-  } catch (error) {
-    console.error('Error fetching assets:', error);
-    // Return empty data during build
-    return <AssetsClient assets={[]} groupedAssets={{}} />;
-  }
 } 

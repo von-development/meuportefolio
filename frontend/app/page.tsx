@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { BarChart3Icon, LineChart, Wallet, ArrowRight } from "lucide-react";
+import { BarChart3, LineChart, Wallet, ArrowRight } from "lucide-react";
 
 export default function Home() {
   return (
@@ -25,7 +25,7 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full sm:w-auto">
               <Button size="lg" className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-lg text-white" asChild>
-                <Link href="/signup">Criar Conta</Link>
+                <Link href="/register">Criar Conta</Link>
               </Button>
               <Button size="lg" variant="outline" className="border-blue-700/20 hover:bg-blue-700/10 text-lg text-white" asChild>
                 <Link href="/login">Entrar</Link>
@@ -74,7 +74,7 @@ export default function Home() {
           <Card className="bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-background/60 hover:bg-card/80 transition-all border-blue-700/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BarChart3Icon className="h-5 w-5 text-pink-500" />
+                <BarChart3 className="h-5 w-5 text-pink-500" />
                 Análise Detalhada
               </CardTitle>
               <CardDescription>Métricas e insights importantes</CardDescription>
