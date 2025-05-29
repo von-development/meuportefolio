@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('pt-BR', {
+  return new Date(date).toLocaleDateString('en-US', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -14,9 +14,9 @@ export function formatDate(date: string) {
 }
 
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'BRL',
+    currency: 'USD',
   }).format(value);
 }
 
@@ -28,11 +28,11 @@ export function formatUSD(value: number): string {
 }
 
 export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('pt-BR').format(value);
+  return new Intl.NumberFormat('en-US').format(value);
 }
 
 export function formatPercentage(value: number): string {
-  return new Intl.NumberFormat('pt-BR', {
+  return new Intl.NumberFormat('en-US', {
     style: 'percent',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
