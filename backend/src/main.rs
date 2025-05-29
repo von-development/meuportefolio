@@ -1,7 +1,7 @@
 mod models;
 mod handlers;
 mod db;
-mod utils;
+
 
 use axum::{Router, routing::{get, post, put, delete}};
 use utoipa::OpenApi;
@@ -33,7 +33,12 @@ use axum::http::{Method, HeaderName, header};
         handlers::update_portfolio,
         handlers::delete_portfolio,
         handlers::get_portfolio_summary,
-        handlers::get_portfolio_holdings
+        handlers::get_portfolio_holdings,
+        handlers::get_user_risk_metrics,
+        handlers::get_portfolio_risk_analysis,
+        handlers::get_risk_summary,
+        handlers::get_portfolio_risk_summary,
+        handlers::get_user_risk_summary
     ),
     components(
         schemas(
@@ -48,7 +53,11 @@ use axum::http::{Method, HeaderName, header};
             models::CreatePortfolioRequest,
             models::UpdatePortfolioRequest,
             models::PortfolioSummary,
-            models::AssetHolding
+            models::AssetHolding,
+            models::RiskMetrics,
+            models::RiskAnalysis,
+            models::PortfolioRiskAnalysis,
+            models::RiskSummary
         )
     ),
     tags(
@@ -93,33 +102,42 @@ async fn main() -> anyhow::Result<()> {
         .route("/users", post(handlers::create_user))
         .route("/users/login", post(handlers::login))
         .route("/users/logout", post(handlers::logout))
-        .route("/users/{id}", get(handlers::get_user))
-        .route("/users/{id}", put(handlers::update_user))
-        .route("/users/{id}", delete(handlers::delete_user));
+        .route("/users/{userId}", get(handlers::get_user))
+        .route("/users/{userId}", put(handlers::update_user))
+        .route("/users/{userId}", delete(handlers::delete_user));
 
     // Portfolio routes second
     let portfolio_routes = Router::new()
         .route("/portfolios", get(handlers::list_portfolios))
         .route("/portfolios", post(handlers::create_portfolio))
-        .route("/portfolios/{id}", get(handlers::get_portfolio))
-        .route("/portfolios/{id}", put(handlers::update_portfolio))
-        .route("/portfolios/{id}", delete(handlers::delete_portfolio))
-        .route("/portfolios/{id}/summary", get(handlers::get_portfolio_summary))
-        .route("/portfolios/{id}/holdings", get(handlers::get_portfolio_holdings));
+        .route("/portfolios/{portfolioId}", get(handlers::get_portfolio))
+        .route("/portfolios/{portfolioId}", put(handlers::update_portfolio))
+        .route("/portfolios/{portfolioId}", delete(handlers::delete_portfolio))
+        .route("/portfolios/{portfolioId}/summary", get(handlers::get_portfolio_summary))
+        .route("/portfolios/{portfolioId}/holdings", get(handlers::get_portfolio_holdings));
 
     // Asset routes last
     let asset_routes = Router::new()
         .route("/assets", get(handlers::list_assets))
-        .route("/assets/{id}", get(handlers::get_asset))
-        .route("/assets/{id}/price-history", get(handlers::get_asset_price_history))
+        .route("/assets/{assetId}", get(handlers::get_asset))
+        .route("/assets/{assetId}/price-history", get(handlers::get_asset_price_history))
         .route("/assets/companies", get(handlers::list_companies))
         .route("/assets/indices", get(handlers::list_indices));
+
+    // Risk routes
+    let risk_routes = Router::new()
+        .route("/risk/metrics/user/{userId}", get(handlers::get_user_risk_metrics))
+        .route("/risk/metrics/portfolio/{portfolioId}", get(handlers::get_portfolio_risk_analysis))
+        .route("/risk/summary", get(handlers::get_risk_summary))
+        .route("/risk/summary/portfolio/{portfolioId}", get(handlers::get_portfolio_risk_summary))
+        .route("/risk/summary/user/{userId}", get(handlers::get_user_risk_summary));
 
     // Combine all API routes under v1
     let api_v1 = Router::new()
         .merge(user_routes)
         .merge(portfolio_routes)
-        .merge(asset_routes);
+        .merge(asset_routes)
+        .merge(risk_routes);
 
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger-ui")

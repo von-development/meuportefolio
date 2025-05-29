@@ -2,8 +2,8 @@ use axum::{Json, extract::{Path, Query}};
 use crate::{models::{Portfolio, CreatePortfolioRequest, UpdatePortfolioRequest, PortfolioSummary, AssetHolding}, db};
 use uuid::Uuid;
 use axum::http::StatusCode;
-use crate::utils::{decimal_to_f64, sql_decimal_to_decimal, to_sql_numeric};
 use serde::Deserialize;
+
 
 #[derive(Deserialize)]
 pub struct ListPortfoliosQuery {
@@ -58,11 +58,11 @@ pub async fn list_portfolios(
     
     let portfolios = rows.into_iter().map(|row| {
         let current_funds = row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
-            .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+            .map(|n| n.value() as f64)
             .unwrap_or_default();
             
         let current_profit_pct = row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
-            .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+            .map(|n| n.value() as f64)
             .unwrap_or_default();
 
         Portfolio {
@@ -115,8 +115,6 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
         return Err((StatusCode::BAD_REQUEST, "User does not exist".to_string()));
     }
 
-    let initial_funds_str = to_sql_numeric(portfolio.initial_funds);
-
     let query = "INSERT INTO portfolio.Portfolios (UserID, Name, CurrentFunds, CreationDate, LastUpdated) 
                  OUTPUT INSERTED.* 
                  VALUES (@P1, @P2, @P3, SYSDATETIME(), SYSDATETIME())";
@@ -126,7 +124,7 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
         &[
             &tiberius::Uuid::from_bytes(*portfolio.user_id.as_bytes()),
             &portfolio.name,
-            &initial_funds_str,
+            &portfolio.initial_funds,
         ],
     ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create portfolio: {}", e)))?;
 
@@ -143,8 +141,12 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
         creation_date: row.get::<chrono::NaiveDateTime, _>("CreationDate")
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
-        current_funds: decimal_to_f64(sql_decimal_to_decimal(row.get("CurrentFunds"))),
-        current_profit_pct: decimal_to_f64(sql_decimal_to_decimal(row.get("CurrentProfitPct"))),
+        current_funds: row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
+            .map(|n| n.value() as f64)
+            .unwrap_or_default(),
+        current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
+            .map(|n| n.value() as f64)
+            .unwrap_or_default(),
         last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
@@ -156,10 +158,10 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
 /// Get portfolio details
 #[utoipa::path(
     get,
-    path = "/api/v1/portfolios/{id}",
+    path = "/api/v1/portfolios/{portfolioId}",
     tag = "portfolios",
     params(
-        ("id" = i32, Path, description = "Portfolio ID to fetch")
+        ("portfolioId" = i32, Path, description = "Portfolio ID to fetch")
     ),
     responses(
         (status = 200, description = "Portfolio found successfully", body = Portfolio),
@@ -167,12 +169,12 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
         (status = 500, description = "Internal server error", body = String)
     )
 )]
-pub async fn get_portfolio(Path(id): Path<i32>) -> Result<Json<Portfolio>, (StatusCode, String)> {
+pub async fn get_portfolio(Path(portfolio_id): Path<i32>) -> Result<Json<Portfolio>, (StatusCode, String)> {
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
     let query = "SELECT * FROM portfolio.Portfolios WHERE PortfolioID = @P1";
-    let stream = client.query(query, &[&id]).await.map_err(|e| 
+    let stream = client.query(query, &[&portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to execute query: {}", e)))?;
     
     let row = stream.into_first_result().await
@@ -190,8 +192,12 @@ pub async fn get_portfolio(Path(id): Path<i32>) -> Result<Json<Portfolio>, (Stat
         creation_date: row.get::<chrono::NaiveDateTime, _>("CreationDate")
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
-        current_funds: decimal_to_f64(sql_decimal_to_decimal(row.get("CurrentFunds"))),
-        current_profit_pct: decimal_to_f64(sql_decimal_to_decimal(row.get("CurrentProfitPct"))),
+        current_funds: row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
+            .map(|n| n.value() as f64)
+            .unwrap_or_default(),
+        current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
+            .map(|n| n.value() as f64)
+            .unwrap_or_default(),
         last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
@@ -203,10 +209,10 @@ pub async fn get_portfolio(Path(id): Path<i32>) -> Result<Json<Portfolio>, (Stat
 /// Get portfolio summary
 #[utoipa::path(
     get,
-    path = "/api/v1/portfolios/{id}/summary",
+    path = "/api/v1/portfolios/{portfolioId}/summary",
     tag = "portfolios",
     params(
-        ("id" = i32, Path, description = "Portfolio ID to fetch summary for")
+        ("portfolioId" = i32, Path, description = "Portfolio ID to fetch summary for")
     ),
     responses(
         (status = 200, description = "Portfolio summary retrieved successfully", body = PortfolioSummary),
@@ -214,13 +220,13 @@ pub async fn get_portfolio(Path(id): Path<i32>) -> Result<Json<Portfolio>, (Stat
         (status = 500, description = "Internal server error", body = String)
     )
 )]
-pub async fn get_portfolio_summary(Path(id): Path<i32>) -> Result<Json<PortfolioSummary>, (StatusCode, String)> {
+pub async fn get_portfolio_summary(Path(portfolio_id): Path<i32>) -> Result<Json<PortfolioSummary>, (StatusCode, String)> {
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
     // First check if portfolio exists
     let check_query = "SELECT COUNT(*) as count FROM portfolio.Portfolios WHERE PortfolioID = @P1";
-    let stream = client.query(check_query, &[&id]).await.map_err(|e|
+    let stream = client.query(check_query, &[&portfolio_id]).await.map_err(|e|
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to check portfolio existence: {}", e)))?;
     
     let result = stream.into_first_result().await.map_err(|e|
@@ -235,7 +241,7 @@ pub async fn get_portfolio_summary(Path(id): Path<i32>) -> Result<Json<Portfolio
     }
 
     let query = "SELECT * FROM portfolio.vw_PortfolioSummary WHERE PortfolioID = @P1";
-    let stream = client.query(query, &[&id]).await.map_err(|e| 
+    let stream = client.query(query, &[&portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to execute query: {}", e)))?;
     
     let row = stream.into_first_result().await
@@ -249,10 +255,10 @@ pub async fn get_portfolio_summary(Path(id): Path<i32>) -> Result<Json<Portfolio
         portfolio_name: row.get::<&str, _>("PortfolioName").unwrap_or_default().to_string(),
         owner: row.get::<&str, _>("Owner").unwrap_or_default().to_string(),
         current_funds: row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
-            .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+            .map(|n| n.value() as f64)
             .unwrap_or_default(),
         current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
-            .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+            .map(|n| n.value() as f64)
             .unwrap_or_default(),
         creation_date: row.get::<chrono::NaiveDateTime, _>("CreationDate")
             .map(|dt| dt.to_string())
@@ -266,10 +272,10 @@ pub async fn get_portfolio_summary(Path(id): Path<i32>) -> Result<Json<Portfolio
 /// Get portfolio holdings
 #[utoipa::path(
     get,
-    path = "/api/v1/portfolios/{id}/holdings",
+    path = "/api/v1/portfolios/{portfolioId}/holdings",
     tag = "portfolios",
     params(
-        ("id" = i32, Path, description = "Portfolio ID to fetch holdings for")
+        ("portfolioId" = i32, Path, description = "Portfolio ID to fetch holdings for")
     ),
     responses(
         (status = 200, description = "Portfolio holdings retrieved successfully", body = Vec<AssetHolding>),
@@ -277,13 +283,13 @@ pub async fn get_portfolio_summary(Path(id): Path<i32>) -> Result<Json<Portfolio
         (status = 500, description = "Internal server error", body = String)
     )
 )]
-pub async fn get_portfolio_holdings(Path(id): Path<i32>) -> Result<Json<Vec<AssetHolding>>, (StatusCode, String)> {
+pub async fn get_portfolio_holdings(Path(portfolio_id): Path<i32>) -> Result<Json<Vec<AssetHolding>>, (StatusCode, String)> {
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
     // First check if portfolio exists
     let check_query = "SELECT COUNT(*) as count FROM portfolio.Portfolios WHERE PortfolioID = @P1";
-    let stream = client.query(check_query, &[&id]).await.map_err(|e|
+    let stream = client.query(check_query, &[&portfolio_id]).await.map_err(|e|
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to check portfolio existence: {}", e)))?;
     
     let result = stream.into_first_result().await.map_err(|e|
@@ -298,7 +304,7 @@ pub async fn get_portfolio_holdings(Path(id): Path<i32>) -> Result<Json<Vec<Asse
     }
 
     let query = "SELECT * FROM portfolio.vw_AssetHoldings WHERE PortfolioID = @P1";
-    let stream = client.query(query, &[&id]).await.map_err(|e| 
+    let stream = client.query(query, &[&portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to execute query: {}", e)))?;
     
     let rows = stream.into_first_result().await.map_err(|e| 
@@ -313,13 +319,13 @@ pub async fn get_portfolio_holdings(Path(id): Path<i32>) -> Result<Json<Vec<Asse
             symbol: row.get::<&str, _>("Symbol").unwrap_or_default().to_string(),
             asset_type: row.get::<&str, _>("AssetType").unwrap_or_default().to_string(),
             quantity_held: row.get::<tiberius::numeric::Numeric, _>("QuantityHeld")
-                .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+                .map(|n| n.value() as f64)
                 .unwrap_or_default(),
             current_price: row.get::<tiberius::numeric::Numeric, _>("CurrentPrice")
-                .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+                .map(|n| n.value() as f64)
                 .unwrap_or_default(),
             market_value: row.get::<tiberius::numeric::Numeric, _>("MarketValue")
-                .map(|n| n.to_string().parse::<f64>().unwrap_or_default())
+                .map(|n| n.value() as f64)
                 .unwrap_or_default(),
         }
     }).collect();
@@ -330,10 +336,10 @@ pub async fn get_portfolio_holdings(Path(id): Path<i32>) -> Result<Json<Vec<Asse
 /// Update portfolio
 #[utoipa::path(
     put,
-    path = "/api/v1/portfolios/{id}",
+    path = "/api/v1/portfolios/{portfolioId}",
     tag = "portfolios",
     params(
-        ("id" = i32, Path, description = "Portfolio ID to update")
+        ("portfolioId" = i32, Path, description = "Portfolio ID to update")
     ),
     request_body = UpdatePortfolioRequest,
     responses(
@@ -343,14 +349,14 @@ pub async fn get_portfolio_holdings(Path(id): Path<i32>) -> Result<Json<Vec<Asse
     )
 )]
 pub async fn update_portfolio(
-    Path(id): Path<i32>,
+    Path(portfolio_id): Path<i32>,
     Json(update): Json<UpdatePortfolioRequest>
 ) -> Result<Json<Portfolio>, (StatusCode, String)> {
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
     let mut updates = Vec::new();
-    let mut params: Vec<String> = Vec::new();
+    let mut values = Vec::new();  // Store owned values
     let mut sql_params: Vec<&(dyn tiberius::ToSql)> = Vec::new();
     let mut param_index = 1;
 
@@ -359,10 +365,11 @@ pub async fn update_portfolio(
         sql_params.push(name);
         param_index += 1;
     }
-    if let Some(current_funds) = update.current_funds {
+
+    if let Some(funds) = update.current_funds {
         updates.push(format!("CurrentFunds = @P{}", param_index));
-        let funds_str = to_sql_numeric(current_funds);
-        params.push(funds_str);
+        values.push(funds);  // Store the value
+        sql_params.push(values.last().unwrap());  // Reference the stored value
         param_index += 1;
     }
 
@@ -371,18 +378,13 @@ pub async fn update_portfolio(
     }
 
     updates.push("LastUpdated = SYSDATETIME()".to_string());
-    sql_params.push(&id);
+    sql_params.push(&portfolio_id);
 
     let query = format!(
         "UPDATE portfolio.Portfolios SET {} WHERE PortfolioID = @P{} OUTPUT INSERTED.*",
         updates.join(", "),
         param_index
     );
-
-    // Convert all parameters to SQL parameters
-    for param in &params {
-        sql_params.push(param);
-    }
 
     let stream = client.query(&query, &sql_params[..]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update portfolio: {}", e)))?;
@@ -402,8 +404,12 @@ pub async fn update_portfolio(
         creation_date: row.get::<chrono::NaiveDateTime, _>("CreationDate")
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
-        current_funds: decimal_to_f64(sql_decimal_to_decimal(row.get("CurrentFunds"))),
-        current_profit_pct: decimal_to_f64(sql_decimal_to_decimal(row.get("CurrentProfitPct"))),
+        current_funds: row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
+            .map(|n| n.value() as f64)
+            .unwrap_or_default(),
+        current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
+            .map(|n| n.value() as f64)
+            .unwrap_or_default(),
         last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
@@ -415,10 +421,10 @@ pub async fn update_portfolio(
 /// Delete portfolio
 #[utoipa::path(
     delete,
-    path = "/api/v1/portfolios/{id}",
+    path = "/api/v1/portfolios/{portfolioId}",
     tag = "portfolios",
     params(
-        ("id" = i32, Path, description = "Portfolio ID to delete")
+        ("portfolioId" = i32, Path, description = "Portfolio ID to delete")
     ),
     responses(
         (status = 204, description = "Portfolio deleted successfully"),
@@ -426,12 +432,12 @@ pub async fn update_portfolio(
         (status = 500, description = "Internal server error", body = String)
     )
 )]
-pub async fn delete_portfolio(Path(id): Path<i32>) -> Result<StatusCode, (StatusCode, String)> {
+pub async fn delete_portfolio(Path(portfolio_id): Path<i32>) -> Result<StatusCode, (StatusCode, String)> {
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
     let query = "DELETE FROM portfolio.Portfolios WHERE PortfolioID = @P1";
-    let stream = client.query(query, &[&id]).await.map_err(|e| 
+    let stream = client.query(query, &[&portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete portfolio: {}", e)))?;
     
     let rows_affected = stream.into_first_result().await.map_err(|e| 

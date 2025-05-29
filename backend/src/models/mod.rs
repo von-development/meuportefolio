@@ -3,7 +3,9 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 mod portfolio;
+mod risk;
 pub use portfolio::*;
+pub use risk::*;
 
 #[derive(Serialize, ToSchema)]
 pub struct Asset {

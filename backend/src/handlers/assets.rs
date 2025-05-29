@@ -103,10 +103,10 @@ pub async fn list_assets(
 /// Get asset details by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/assets/{id}",
+    path = "/api/v1/assets/{assetId}",
     tag = "assets",
     params(
-        ("id" = i32, Path, description = "Asset ID to fetch")
+        ("assetId" = i32, Path, description = "Asset ID to fetch")
     ),
     responses(
         (status = 200, description = "Asset details retrieved successfully", body = Asset),
@@ -114,14 +114,14 @@ pub async fn list_assets(
         (status = 500, description = "Internal server error", body = String)
     )
 )]
-pub async fn get_asset(Path(id): Path<i32>) -> Result<Json<Asset>, (StatusCode, String)> {
+pub async fn get_asset(Path(asset_id): Path<i32>) -> Result<Json<Asset>, (StatusCode, String)> {
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
     let query = "SELECT AssetID, Name, Symbol, AssetType, Price, Volume, AvailableShares, LastUpdated 
                  FROM portfolio.Assets WHERE AssetID = @P1";
     
-    let stream = client.query(query, &[&id]).await.map_err(|e| 
+    let stream = client.query(query, &[&asset_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to execute query: {}", e)))?;
     
     let row = stream.into_first_result().await
@@ -153,10 +153,10 @@ pub async fn get_asset(Path(id): Path<i32>) -> Result<Json<Asset>, (StatusCode, 
 /// Get asset price history
 #[utoipa::path(
     get,
-    path = "/api/v1/assets/{id}/price-history",
+    path = "/api/v1/assets/{assetId}/price-history",
     tag = "assets",
     params(
-        ("id" = i32, Path, description = "Asset ID to fetch price history for")
+        ("assetId" = i32, Path, description = "Asset ID to fetch price history for")
     ),
     responses(
         (status = 200, description = "Asset price history retrieved successfully", body = Vec<AssetPriceHistory>),
@@ -164,13 +164,13 @@ pub async fn get_asset(Path(id): Path<i32>) -> Result<Json<Asset>, (StatusCode, 
         (status = 500, description = "Internal server error", body = String)
     )
 )]
-pub async fn get_asset_price_history(Path(id): Path<i32>) -> Result<Json<Vec<AssetPriceHistory>>, (StatusCode, String)> {
+pub async fn get_asset_price_history(Path(asset_id): Path<i32>) -> Result<Json<Vec<AssetPriceHistory>>, (StatusCode, String)> {
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
     // First check if asset exists
     let check_query = "SELECT COUNT(*) as count FROM portfolio.Assets WHERE AssetID = @P1";
-    let stream = client.query(check_query, &[&id]).await.map_err(|e|
+    let stream = client.query(check_query, &[&asset_id]).await.map_err(|e|
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to check asset existence: {}", e)))?;
     
     let result = stream.into_first_result().await.map_err(|e|
@@ -194,7 +194,7 @@ pub async fn get_asset_price_history(Path(id): Path<i32>) -> Result<Json<Vec<Ass
                  WHERE ph.AssetID = @P1 
                  ORDER BY ph.PriceDate DESC";
 
-    let stream = client.query(query, &[&id]).await.map_err(|e| 
+    let stream = client.query(query, &[&asset_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to execute query: {}", e)))?;
     
     let rows = stream.into_first_result().await.map_err(|e| 

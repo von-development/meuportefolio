@@ -50,7 +50,7 @@ GET    /api/v1/transactions/user/{id}         - List user transactions
 
 ### Risk Analysis
 ```
-GET    /api/v1/risk/metrics/:userId          - Get user risk metrics (uses vw_RiskAnalysis)
+GET    /api/v1/risk/metrics/{userId}          - Get user risk metrics (uses vw_RiskAnalysis)
 GET    /api/v1/risk/portfolio/{id}            - Get portfolio risk analysis
 GET    /api/v1/risk/summary                  - Get overall risk summary
 ```
