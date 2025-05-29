@@ -19,7 +19,6 @@ EXPOSE 3000
 # Environment variables
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=development
-ENV NEXT_PUBLIC_API_URL=http://api:8080/api/v1
 
 # Define the command to run your app in development mode
 CMD ["npm", "run", "dev"] 
