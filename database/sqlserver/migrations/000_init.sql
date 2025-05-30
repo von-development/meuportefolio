@@ -1,0 +1,4 @@
+USE p6g4;
+GO
+CREATE SCHEMA portfolio;
+GO

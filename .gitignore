@@ -2,7 +2,7 @@
 /backend/target/
 **/*.rs.bk
 Cargo.lock
-
+.node_modules
 # SQL files
 
 *.sqlite
@@ -118,3 +118,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 brainstorm.md
+
+
+recover/
+
+.env.example

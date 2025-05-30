@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # SQL Server client service for running migrations
+  sqlserver-client:
+    image: mcr.microsoft.com/mssql-tools:latest
+    container_name: meuportefolio-sqlserver-client
+    environment:
+      # Standard SQL Server connection variables
+      - SQLSERVER_HOST=mednat.ieeta.pt\SQLSERVER,8101
+      - SQLSERVER_USER=p6g4
+      - SQLSERVER_PASSWORD=VictorMaria123
+      - SQLSERVER_DATABASE=p6g4
+      # Also set SQLCMD variables (these are recognized by sqlcmd)
+      - SQLCMDSERVER=mednat.ieeta.pt\SQLSERVER,8101
+      - SQLCMDUSER=p6g4
+      - SQLCMDPASSWORD=VictorMaria123
+      - SQLCMDDATABASE=p6g4
+    volumes:
+      - ./database/sqlserver:/sql
+      - ./database/scripts:/scripts
+    working_dir: /sql
+    networks:
+      - meuportefolio-network
+    # Keep container running for manual commands
+    command: tail -f /dev/null
+    
+  # Application service (for future use)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meuportefolio-app
+    environment:
+      - DATABASE_HOST=mednat.ieeta.pt
+      - DATABASE_PORT=8101
+      - DATABASE_NAME=meuportefolio
+      - DATABASE_USER=p6g4
+      - DATABASE_PASSWORD=VictorMaria123
+      - DATABASE_INSTANCE=SQLSERVER
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - meuportefolio-network
+    depends_on:
+      - sqlserver-client
+    # Comment out until you have an application
+    profiles:
+      - disabled
+
+networks:
+  meuportefolio-network:
+    driver: bridge 

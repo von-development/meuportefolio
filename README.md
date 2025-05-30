@@ -1,3 +1,80 @@
+# MeuPortfolio v2.0
+
+Simple portfolio management application with **TypeScript**, **React**, and **SQL Server**.
+
+## 🚀 Quick Setup
+
+### 1. Start SQL Server
+```bash
+npm run start-db
+```
+
+### 2. Run Database Migrations
+```bash
+npm run setup
+```
+
+This will:
+- Start SQL Server in Docker (localhost:1433)
+- Show you which migration files to run in SQL Server Management Studio
+
+### 3. Connect with SQL Server Management Studio
+- **Server**: `localhost,1433`
+- **Login**: `sa`
+- **Password**: `YourStrong!Passw0rd`
+
+### 4. Run Migration Files (in order)
+Open and execute these files in SQL Server Management Studio:
+
+1. `database/sqlserver/migrations/001_tables_v2.sql`
+2. `database/sqlserver/migrations/002_indexes.sql`
+3. `database/sqlserver/migrations/003_views_v2.sql`
+4. `database/sqlserver/migrations/004_triggers.sql`
+5. `database/sqlserver/migrations/005_1_user_procedures.sql`
+6. `database/sqlserver/migrations/005_2_portfolio_procedures.sql`
+7. `database/sqlserver/migrations/005_3_trading_procedures.sql`
+8. `database/sqlserver/migrations/005_4_asset_procedures.sql`
+9. `database/sqlserver/migrations/006_functions.sql`
+
+### 5. Start the Application
+```bash
+npm start
+```
+
+This starts:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+- SQL Server: localhost:1433
+
+## 🗂️ Project Structure
+
+```
+meuportefolio/
+├── database/sqlserver/migrations/    # Your v2 SQL scripts
+├── backend/                          # TypeScript API
+├── frontend/                         # React app
+├── docker/                           # Docker setup
+└── scripts/                          # Setup scripts
+```
+
+## 🔄 Connecting to Existing Database
+
+If you have an existing SQL Server database:
+
+1. Copy `env.example` to `.env`
+2. Update the database settings:
+```
+DB_HOST=your-server-name
+DB_SA_PASSWORD=your-password
+DB_NAME=your-database-name
+```
+
+## 📝 Development
+
+- Backend development: `npm run dev:backend`
+- Frontend development: `npm run dev:frontend`
+- Stop all services: `npm run stop`
+
 <p align="center">
   <img src="report/img/meu_portefolio_logo.png" alt="meuPortefólio Logo" width="150"/>
 </p>
