@@ -1,0 +1,23 @@
+[package]
+name = "backend"
+version = "0.1.2"
+edition = "2021"
+
+[dependencies]
+axum = "0.8.4"
+tokio = { version = "1", features = ["full"] }
+tiberius = { version = "0.12", features = ["tds73", "chrono"], default-features = false }
+tokio-util = { version = "0.7", features = ["compat"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0"
+dotenvy = "0.15"
+jsonwebtoken = "9"
+argon2 = "0.5"
+anyhow = "1.0"  # For error handling
+futures-util = "0.3"
+utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+tower-http = { version = "0.6.4", features = ["cors"] }
+uuid = { version = "1.7", features = ["serde", "v4"] }
+chrono = "0.4.41"
+rust_decimal = { version = "1.34", features = ["serde"] }
