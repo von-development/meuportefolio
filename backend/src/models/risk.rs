@@ -1,7 +1,7 @@
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
+//
 /// Risk metrics for a user from the database
 #[derive(Serialize, ToSchema)]
 pub struct RiskMetrics {

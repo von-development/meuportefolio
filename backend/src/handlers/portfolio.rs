@@ -6,6 +6,10 @@ use uuid::Uuid;
 use axum::http::StatusCode;
 use serde::Deserialize;
 
+// Helper function to safely convert SQL Server Numeric to f64
+fn numeric_to_f64(numeric: tiberius::numeric::Numeric) -> f64 {
+    numeric.to_string().parse::<f64>().unwrap_or(0.0)
+}
 
 #[derive(Deserialize)]
 pub struct ListPortfoliosQuery {
@@ -60,11 +64,11 @@ pub async fn list_portfolios(
     
     let portfolios = rows.into_iter().map(|row| {
         let current_funds = row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default();
             
         let current_profit_pct = row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default();
 
         Portfolio {
@@ -103,6 +107,9 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
+    // Use 0.0 as default if initial_funds is not provided
+    let initial_funds = portfolio.initial_funds.unwrap_or(0.0);
+    
     // Use stored procedure for creation
     let query = "EXEC portfolio.sp_CreatePortfolio @P1, @P2, @P3";
     
@@ -111,7 +118,7 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
         &[
             &tiberius::Uuid::from_bytes(*portfolio.user_id.as_bytes()),
             &portfolio.name,
-            &portfolio.initial_funds,
+            &initial_funds,
         ],
     ).await.map_err(|e| {
         let error_msg = format!("{}", e);
@@ -140,10 +147,10 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
         current_funds: row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default(),
         current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default(),
         last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
             .map(|dt| dt.to_string())
@@ -156,10 +163,10 @@ pub async fn create_portfolio(Json(portfolio): Json<CreatePortfolioRequest>) -> 
 /// Get portfolio details
 #[utoipa::path(
     get,
-    path = "/api/v1/portfolios/{portfolioId}",
+    path = "/api/v1/portfolios/{portfolio_id}",
     tag = "portfolios",
     params(
-        ("portfolioId" = i32, Path, description = "Portfolio ID to fetch")
+        ("portfolio_id" = i32, Path, description = "Portfolio ID to fetch")
     ),
     responses(
         (status = 200, description = "Portfolio found successfully", body = Portfolio),
@@ -191,10 +198,10 @@ pub async fn get_portfolio(Path(portfolio_id): Path<i32>) -> Result<Json<Portfol
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
         current_funds: row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default(),
         current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default(),
         last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
             .map(|dt| dt.to_string())
@@ -207,10 +214,10 @@ pub async fn get_portfolio(Path(portfolio_id): Path<i32>) -> Result<Json<Portfol
 /// Get portfolio summary
 #[utoipa::path(
     get,
-    path = "/api/v1/portfolios/{portfolioId}/summary",
+    path = "/api/v1/portfolios/{portfolio_id}/summary",
     tag = "portfolios",
     params(
-        ("portfolioId" = i32, Path, description = "Portfolio ID to fetch summary for")
+        ("portfolio_id" = i32, Path, description = "Portfolio ID to fetch summary for")
     ),
     responses(
         (status = 200, description = "Portfolio summary retrieved successfully", body = PortfolioSummary),
@@ -238,6 +245,7 @@ pub async fn get_portfolio_summary(Path(portfolio_id): Path<i32>) -> Result<Json
         return Err((StatusCode::NOT_FOUND, "Portfolio not found".to_string()));
     }
 
+    // Use the enhanced portfolio summary view
     let query = "SELECT * FROM portfolio.vw_PortfolioSummary WHERE PortfolioID = @P1";
     let stream = client.query(query, &[&portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to execute query: {}", e)))?;
@@ -251,12 +259,12 @@ pub async fn get_portfolio_summary(Path(portfolio_id): Path<i32>) -> Result<Json
     let summary = PortfolioSummary {
         portfolio_id: row.get("PortfolioID").unwrap_or_default(),
         portfolio_name: row.get::<&str, _>("PortfolioName").unwrap_or_default().to_string(),
-        owner: row.get::<&str, _>("Owner").unwrap_or_default().to_string(),
+        owner: row.get::<&str, _>("OwnerName").unwrap_or_default().to_string(),
         current_funds: row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default(),
-        current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
-            .map(|n| n.value() as f64)
+        current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("UnrealizedGainLossPercent")
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default(),
         creation_date: row.get::<chrono::NaiveDateTime, _>("CreationDate")
             .map(|dt| dt.to_string())
@@ -270,10 +278,10 @@ pub async fn get_portfolio_summary(Path(portfolio_id): Path<i32>) -> Result<Json
 /// Get portfolio holdings
 #[utoipa::path(
     get,
-    path = "/api/v1/portfolios/{portfolioId}/holdings",
+    path = "/api/v1/portfolios/{portfolio_id}/holdings",
     tag = "portfolios",
     params(
-        ("portfolioId" = i32, Path, description = "Portfolio ID to fetch holdings for")
+        ("portfolio_id" = i32, Path, description = "Portfolio ID to fetch holdings for")
     ),
     responses(
         (status = 200, description = "Portfolio holdings retrieved successfully", body = Vec<AssetHolding>),
@@ -301,7 +309,8 @@ pub async fn get_portfolio_holdings(Path(portfolio_id): Path<i32>) -> Result<Jso
         return Err((StatusCode::NOT_FOUND, "Portfolio not found".to_string()));
     }
 
-    let query = "SELECT * FROM portfolio.vw_AssetHoldings WHERE PortfolioID = @P1";
+    // Use the correct view name for portfolio holdings
+    let query = "SELECT * FROM portfolio.vw_PortfolioHoldings WHERE PortfolioID = @P1";
     let stream = client.query(query, &[&portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to execute query: {}", e)))?;
     
@@ -317,13 +326,13 @@ pub async fn get_portfolio_holdings(Path(portfolio_id): Path<i32>) -> Result<Jso
             symbol: row.get::<&str, _>("Symbol").unwrap_or_default().to_string(),
             asset_type: row.get::<&str, _>("AssetType").unwrap_or_default().to_string(),
             quantity_held: row.get::<tiberius::numeric::Numeric, _>("QuantityHeld")
-                .map(|n| n.value() as f64)
+                .map(|n| numeric_to_f64(n))
                 .unwrap_or_default(),
             current_price: row.get::<tiberius::numeric::Numeric, _>("CurrentPrice")
-                .map(|n| n.value() as f64)
+                .map(|n| numeric_to_f64(n))
                 .unwrap_or_default(),
-            market_value: row.get::<tiberius::numeric::Numeric, _>("MarketValue")
-                .map(|n| n.value() as f64)
+            market_value: row.get::<tiberius::numeric::Numeric, _>("CurrentValue")
+                .map(|n| numeric_to_f64(n))
                 .unwrap_or_default(),
         }
     }).collect();
@@ -334,10 +343,10 @@ pub async fn get_portfolio_holdings(Path(portfolio_id): Path<i32>) -> Result<Jso
 /// Update portfolio
 #[utoipa::path(
     put,
-    path = "/api/v1/portfolios/{portfolioId}",
+    path = "/api/v1/portfolios/{portfolio_id}",
     tag = "portfolios",
     params(
-        ("portfolioId" = i32, Path, description = "Portfolio ID to update")
+        ("portfolio_id" = i32, Path, description = "Portfolio ID to update")
     ),
     request_body = UpdatePortfolioRequest,
     responses(
@@ -398,10 +407,10 @@ pub async fn update_portfolio(
             .map(|dt| dt.to_string())
             .unwrap_or_default(),
         current_funds: row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default(),
         current_profit_pct: row.get::<tiberius::numeric::Numeric, _>("CurrentProfitPct")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default(),
         last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
             .map(|dt| dt.to_string())
@@ -414,10 +423,10 @@ pub async fn update_portfolio(
 /// Delete portfolio
 #[utoipa::path(
     delete,
-    path = "/api/v1/portfolios/{portfolioId}",
+    path = "/api/v1/portfolios/{portfolio_id}",
     tag = "portfolios",
     params(
-        ("portfolioId" = i32, Path, description = "Portfolio ID to delete")
+        ("portfolio_id" = i32, Path, description = "Portfolio ID to delete")
     ),
     responses(
         (status = 204, description = "Portfolio deleted successfully"),
@@ -512,7 +521,7 @@ pub async fn buy_asset(
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
-    // Get the user ID from the portfolio
+    // Get the user ID from the portfolio - this is needed for the stored procedure
     let user_query = "SELECT UserID FROM portfolio.Portfolios WHERE PortfolioID = @P1";
     let user_stream = client.query(user_query, &[&request.portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get portfolio owner: {}", e)))?;
@@ -524,16 +533,22 @@ pub async fn buy_asset(
         .and_then(|row| row.get::<tiberius::Uuid, _>("UserID"))
         .ok_or((StatusCode::NOT_FOUND, "Portfolio not found".to_string()))?;
 
-    let query = "EXEC portfolio.sp_BuyAsset @P1, @P2, @P3, @P4";
+    // Use the comprehensive stored procedure that handles PortfolioHoldings automatically
+    let query = "EXEC portfolio.sp_BuyAsset @P1, @P2, @P3, @P4, @P5";
+    let unit_price_param: Option<f64> = request.unit_price;
     let stream = client.query(
         query,
-        &[&user_id, &request.portfolio_id, &request.asset_id, &request.quantity],
+        &[
+            &user_id, 
+            &request.portfolio_id, 
+            &request.asset_id, 
+            &request.quantity, 
+            &unit_price_param
+        ],
     ).await.map_err(|e| {
         let error_msg = format!("{}", e);
-        if error_msg.contains("User not found") {
-            (StatusCode::NOT_FOUND, "User not found".to_string())
-        } else if error_msg.contains("Portfolio not found") {
-            (StatusCode::NOT_FOUND, "Portfolio not found".to_string())
+        if error_msg.contains("User not found") || error_msg.contains("does not belong to user") {
+            (StatusCode::NOT_FOUND, "User or portfolio not found".to_string())
         } else if error_msg.contains("Asset not found") {
             (StatusCode::NOT_FOUND, "Asset not found".to_string())
         } else if error_msg.contains("Insufficient funds") {
@@ -552,18 +567,23 @@ pub async fn buy_asset(
         .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "No result returned from buy operation".to_string()))?;
 
     let transaction_id: i64 = row.get("TransactionID").unwrap_or(0);
+    let quantity_purchased: f64 = row.get::<tiberius::numeric::Numeric, _>("QuantityPurchased")
+        .map(|n| numeric_to_f64(n))
+        .unwrap_or(request.quantity);
     let price_per_share: f64 = row.get::<tiberius::numeric::Numeric, _>("PricePerShare")
-        .map(|n| n.value() as f64)
+        .map(|n| numeric_to_f64(n))
         .unwrap_or_default();
-    let total_cost = request.quantity * price_per_share;
+    let total_cost: f64 = row.get::<tiberius::numeric::Numeric, _>("TotalCost")
+        .map(|n| numeric_to_f64(n))
+        .unwrap_or_default();
     let remaining_funds: f64 = row.get::<tiberius::numeric::Numeric, _>("RemainingFunds")
-        .map(|n| n.value() as f64)
+        .map(|n| numeric_to_f64(n))
         .unwrap_or_default();
 
     Ok(Json(BuyAssetResponse {
         status: "Success".to_string(),
         transaction_id,
-        quantity_purchased: request.quantity,
+        quantity_purchased,
         price_per_share,
         total_cost,
         remaining_funds,
@@ -599,7 +619,7 @@ pub async fn sell_asset(
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
-    // Get the user ID from the portfolio
+    // Get the user ID from the portfolio - this is needed for the stored procedure
     let user_query = "SELECT UserID FROM portfolio.Portfolios WHERE PortfolioID = @P1";
     let user_stream = client.query(user_query, &[&request.portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get portfolio owner: {}", e)))?;
@@ -611,21 +631,25 @@ pub async fn sell_asset(
         .and_then(|row| row.get::<tiberius::Uuid, _>("UserID"))
         .ok_or((StatusCode::NOT_FOUND, "Portfolio not found".to_string()))?;
 
-    let query = "EXEC portfolio.sp_SellAsset @P1, @P2, @P3, @P4";
+    // Use the comprehensive stored procedure that handles PortfolioHoldings automatically
+    let query = "EXEC portfolio.sp_SellAsset @P1, @P2, @P3, @P4, @P5";
+    let unit_price_param: Option<f64> = request.unit_price;
     let stream = client.query(
         query,
-        &[&user_id, &request.portfolio_id, &request.asset_id, &request.quantity],
+        &[
+            &user_id, 
+            &request.portfolio_id, 
+            &request.asset_id, 
+            &request.quantity, 
+            &unit_price_param
+        ],
     ).await.map_err(|e| {
         let error_msg = format!("{}", e);
-        if error_msg.contains("User not found") {
-            (StatusCode::NOT_FOUND, "User not found".to_string())
-        } else if error_msg.contains("Portfolio not found") {
-            (StatusCode::NOT_FOUND, "Portfolio not found".to_string())
+        if error_msg.contains("User not found") || error_msg.contains("does not belong to user") {
+            (StatusCode::NOT_FOUND, "User or portfolio not found".to_string())
         } else if error_msg.contains("Asset not found") {
             (StatusCode::NOT_FOUND, "Asset not found".to_string())
-        } else if error_msg.contains("No holdings found") {
-            (StatusCode::NOT_FOUND, "No holdings found for this asset".to_string())
-        } else if error_msg.contains("Insufficient holdings") {
+        } else if error_msg.contains("No holdings found") || error_msg.contains("Insufficient holdings") {
             (StatusCode::BAD_REQUEST, "Insufficient holdings to sell".to_string())
         } else {
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to sell asset: {}", e))
@@ -639,18 +663,23 @@ pub async fn sell_asset(
         .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "No result returned from sell operation".to_string()))?;
 
     let transaction_id: i64 = row.get("TransactionID").unwrap_or(0);
+    let quantity_sold: f64 = row.get::<tiberius::numeric::Numeric, _>("QuantitySold")
+        .map(|n| numeric_to_f64(n))
+        .unwrap_or(request.quantity);
     let price_per_share: f64 = row.get::<tiberius::numeric::Numeric, _>("PricePerShare")
-        .map(|n| n.value() as f64)
+        .map(|n| numeric_to_f64(n))
         .unwrap_or_default();
-    let total_proceeds = request.quantity * price_per_share;
-    let new_funds_balance: f64 = row.get::<tiberius::numeric::Numeric, _>("NewFundsBalance")
-        .map(|n| n.value() as f64)
+    let total_proceeds: f64 = row.get::<tiberius::numeric::Numeric, _>("TotalProceeds")
+        .map(|n| numeric_to_f64(n))
+        .unwrap_or_default();
+    let new_funds_balance: f64 = row.get::<tiberius::numeric::Numeric, _>("NewFunds")
+        .map(|n| numeric_to_f64(n))
         .unwrap_or_default();
 
     Ok(Json(SellAssetResponse {
         status: "Success".to_string(),
         transaction_id,
-        quantity_sold: request.quantity,
+        quantity_sold,
         price_per_share,
         total_proceeds,
         new_funds_balance,
@@ -677,10 +706,11 @@ pub async fn get_portfolio_balance(
     let mut client = db::get_db_client().await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
 
-    let query = "EXEC portfolio.sp_GetPortfolioBalance @P1";
+    // Use the enhanced portfolio summary view for consistent data
+    let query = "SELECT * FROM portfolio.vw_PortfolioSummary WHERE PortfolioID = @P1";
     let stream = client.query(query, &[&portfolio_id]).await.map_err(|e| {
         let error_msg = format!("{}", e);
-        if error_msg.contains("Portfolio not found") {
+        if error_msg.contains("not found") {
             (StatusCode::NOT_FOUND, "Portfolio not found".to_string())
         } else {
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get portfolio balance: {}", e))
@@ -693,19 +723,20 @@ pub async fn get_portfolio_balance(
     let row = rows.into_iter().next()
         .ok_or((StatusCode::NOT_FOUND, "Portfolio not found".to_string()))?;
 
+    let cash_balance = row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
+        .map(|n| numeric_to_f64(n))
+        .unwrap_or_default();
+    let holdings_value = row.get::<tiberius::numeric::Numeric, _>("CurrentMarketValue")
+        .map(|n| numeric_to_f64(n))
+        .unwrap_or_default();
+
     let balance = PortfolioBalance {
         portfolio_id,
         portfolio_name: row.get::<&str, _>("PortfolioName").unwrap_or("").to_string(),
-        cash_balance: row.get::<tiberius::numeric::Numeric, _>("CashBalance")
-            .map(|n| n.value() as f64)
-            .unwrap_or_default(),
-        holdings_value: row.get::<tiberius::numeric::Numeric, _>("HoldingsValue")
-            .map(|n| n.value() as f64)
-            .unwrap_or_default(),
-        total_portfolio_value: row.get::<tiberius::numeric::Numeric, _>("TotalPortfolioValue")
-            .map(|n| n.value() as f64)
-            .unwrap_or_default(),
-        holdings_count: row.try_get("HoldingsCount").ok().flatten(),
+        cash_balance,
+        holdings_value,
+        total_portfolio_value: cash_balance + holdings_value,
+        holdings_count: row.get::<i32, _>("TotalHoldings"),
     };
 
     Ok(Json(balance))
@@ -743,26 +774,8 @@ pub async fn get_portfolio_holdings_summary(
         .and_then(|row| row.get::<&str, _>("Name").map(|s| s.to_string()))
         .ok_or((StatusCode::NOT_FOUND, "Portfolio not found".to_string()))?;
 
-    // Get holdings details
-    let holdings_query = r#"
-        SELECT 
-            h.HoldingID,
-            h.PortfolioID,
-            h.AssetID,
-            a.Name AS AssetName,
-            a.Symbol,
-            a.AssetType,
-            h.QuantityHeld,
-            h.AveragePrice,
-            h.TotalCost,
-            a.Price AS CurrentPrice,
-            (h.QuantityHeld * a.Price) AS CurrentValue,
-            (h.QuantityHeld * a.Price) - h.TotalCost AS UnrealizedGainLoss,
-            h.LastUpdated
-        FROM portfolio.PortfolioHoldings h
-        JOIN portfolio.Assets a ON a.AssetID = h.AssetID
-        WHERE h.PortfolioID = @P1
-    "#;
+    // Use the enhanced portfolio holdings view for detailed information
+    let holdings_query = "SELECT * FROM portfolio.vw_PortfolioHoldings WHERE PortfolioID = @P1";
     
     let holdings_stream = client.query(holdings_query, &[&portfolio_id]).await.map_err(|e| 
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get holdings: {}", e)))?;
@@ -773,15 +786,15 @@ pub async fn get_portfolio_holdings_summary(
     let mut holdings = Vec::new();
     let mut total_holdings_value = 0.0;
     let mut total_cost_basis = 0.0;
-    
+
     for row in holdings_rows {
         let current_value: f64 = row.get::<tiberius::numeric::Numeric, _>("CurrentValue")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default();
         let total_cost: f64 = row.get::<tiberius::numeric::Numeric, _>("TotalCost")
-            .map(|n| n.value() as f64)
+            .map(|n| numeric_to_f64(n))
             .unwrap_or_default();
-        
+
         total_holdings_value += current_value;
         total_cost_basis += total_cost;
 
@@ -793,18 +806,181 @@ pub async fn get_portfolio_holdings_summary(
             symbol: row.get::<&str, _>("Symbol").unwrap_or("").to_string(),
             asset_type: row.get::<&str, _>("AssetType").unwrap_or("").to_string(),
             quantity_held: row.get::<tiberius::numeric::Numeric, _>("QuantityHeld")
-                .map(|n| n.value() as f64)
+                .map(|n| numeric_to_f64(n))
                 .unwrap_or_default(),
             average_price: row.get::<tiberius::numeric::Numeric, _>("AveragePrice")
-                .map(|n| n.value() as f64)
+                .map(|n| numeric_to_f64(n))
                 .unwrap_or_default(),
             total_cost,
             current_price: row.get::<tiberius::numeric::Numeric, _>("CurrentPrice")
-                .map(|n| n.value() as f64)
+                .map(|n| numeric_to_f64(n))
                 .unwrap_or_default(),
             current_value,
             unrealized_gain_loss: row.get::<tiberius::numeric::Numeric, _>("UnrealizedGainLoss")
-                .map(|n| n.value() as f64)
+                .map(|n| numeric_to_f64(n))
+                .unwrap_or_default(),
+            last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
+                .map(|dt| dt.to_string())
+                .unwrap_or_default(),
+        };
+        
+        holdings.push(holding);
+    }
+
+    let total_unrealized_gain_loss = total_holdings_value - total_cost_basis;
+    let assets_count = holdings.len() as i32;
+
+    let summary = PortfolioHoldingsSummary {
+        portfolio_id,
+        portfolio_name,
+        holdings,
+        total_holdings_value,
+        total_cost_basis,
+        total_unrealized_gain_loss,
+        assets_count,
+    };
+
+    Ok(Json(summary))
+}
+
+/// Get portfolio balance using stored procedure for better performance
+#[utoipa::path(
+    get,
+    path = "/api/v1/portfolios/{portfolio_id}/balance-sp",
+    tag = "portfolios",
+    params(
+        ("portfolio_id" = i32, Path, description = "Portfolio ID to get balance for")
+    ),
+    responses(
+        (status = 200, description = "Portfolio balance retrieved successfully using stored procedure", body = PortfolioBalance),
+        (status = 404, description = "Portfolio not found"),
+        (status = 500, description = "Internal server error", body = String)
+    )
+)]
+pub async fn get_portfolio_balance_sp(
+    Path(portfolio_id): Path<i32>
+) -> Result<Json<PortfolioBalance>, (StatusCode, String)> {
+    let mut client = db::get_db_client().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
+
+    // Use the enhanced stored procedure for portfolio balance
+    let query = "EXEC portfolio.sp_GetPortfolioBalance @P1";
+    let stream = client.query(query, &[&portfolio_id]).await.map_err(|e| {
+        let error_msg = format!("{}", e);
+        if error_msg.contains("Portfolio not found") {
+            (StatusCode::NOT_FOUND, "Portfolio not found".to_string())
+        } else {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get portfolio balance: {}", e))
+        }
+    })?;
+
+    let rows = stream.into_first_result().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch portfolio balance: {}", e)))?;
+
+    let row = rows.into_iter().next()
+        .ok_or((StatusCode::NOT_FOUND, "Portfolio not found".to_string()))?;
+
+    let cash_balance = row.get::<tiberius::numeric::Numeric, _>("CurrentFunds")
+        .map(numeric_to_f64)
+        .unwrap_or_default();
+    let holdings_value = row.get::<tiberius::numeric::Numeric, _>("CurrentMarketValue")
+        .map(numeric_to_f64)
+        .unwrap_or_default();
+
+    let balance = PortfolioBalance {
+        portfolio_id,
+        portfolio_name: row.get::<&str, _>("Name").unwrap_or("").to_string(),
+        cash_balance,
+        holdings_value,
+        total_portfolio_value: cash_balance + holdings_value,
+        holdings_count: None, // Not returned by this procedure
+    };
+
+    Ok(Json(balance))
+}
+
+/// Get detailed portfolio holdings using stored procedure for better performance  
+#[utoipa::path(
+    get,
+    path = "/api/v1/portfolios/{portfolio_id}/holdings-summary-sp",
+    tag = "portfolios",
+    params(
+        ("portfolio_id" = i32, Path, description = "Portfolio ID to get holdings summary for")
+    ),
+    responses(
+        (status = 200, description = "Portfolio holdings summary retrieved successfully using stored procedure", body = PortfolioHoldingsSummary),
+        (status = 404, description = "Portfolio not found"),
+        (status = 500, description = "Internal server error", body = String)
+    )
+)]
+pub async fn get_portfolio_holdings_summary_sp(
+    Path(portfolio_id): Path<i32>
+) -> Result<Json<PortfolioHoldingsSummary>, (StatusCode, String)> {
+    let mut client = db::get_db_client().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
+
+    // First get portfolio name
+    let portfolio_query = "SELECT Name FROM portfolio.Portfolios WHERE PortfolioID = @P1";
+    let portfolio_stream = client.query(portfolio_query, &[&portfolio_id]).await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get portfolio: {}", e)))?;
+    
+    let portfolio_rows = portfolio_stream.into_first_result().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch portfolio: {}", e)))?;
+    
+    let portfolio_name = portfolio_rows.into_iter().next()
+        .and_then(|row| row.get::<&str, _>("Name").map(|s| s.to_string()))
+        .ok_or((StatusCode::NOT_FOUND, "Portfolio not found".to_string()))?;
+
+    // Use the enhanced stored procedure for holdings summary
+    let holdings_query = "EXEC portfolio.sp_GetPortfolioHoldingsSummary @P1";
+    
+    let holdings_stream = client.query(holdings_query, &[&portfolio_id]).await.map_err(|e| {
+        let error_msg = format!("{}", e);
+        if error_msg.contains("Portfolio not found") {
+            (StatusCode::NOT_FOUND, "Portfolio not found".to_string())
+        } else {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get holdings: {}", e))
+        }
+    })?;
+    
+    let holdings_rows = holdings_stream.into_first_result().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch holdings: {}", e)))?;
+
+    let mut holdings = Vec::new();
+    let mut total_holdings_value = 0.0;
+    let mut total_cost_basis = 0.0;
+
+    for row in holdings_rows {
+        let total_cost = row.get::<tiberius::numeric::Numeric, _>("TotalCost")
+            .map(numeric_to_f64)
+            .unwrap_or_default();
+        let current_value = row.get::<tiberius::numeric::Numeric, _>("CurrentValue")
+            .map(numeric_to_f64)
+            .unwrap_or_default();
+
+        total_holdings_value += current_value;
+        total_cost_basis += total_cost;
+
+        let holding = PortfolioHolding {
+            holding_id: row.get("HoldingID").unwrap_or(0),
+            portfolio_id: row.get("PortfolioID").unwrap_or(0),
+            asset_id: row.get("AssetID").unwrap_or(0),
+            asset_name: row.get::<&str, _>("AssetName").unwrap_or("").to_string(),
+            symbol: row.get::<&str, _>("AssetSymbol").unwrap_or("").to_string(),
+            asset_type: row.get::<&str, _>("AssetType").unwrap_or("").to_string(),
+            quantity_held: row.get::<tiberius::numeric::Numeric, _>("QuantityHeld")
+                .map(numeric_to_f64)
+                .unwrap_or_default(),
+            average_price: row.get::<tiberius::numeric::Numeric, _>("AveragePrice")
+                .map(numeric_to_f64)
+                .unwrap_or_default(),
+            total_cost,
+            current_price: row.get::<tiberius::numeric::Numeric, _>("CurrentPrice")
+                .map(numeric_to_f64)
+                .unwrap_or_default(),
+            current_value,
+            unrealized_gain_loss: row.get::<tiberius::numeric::Numeric, _>("UnrealizedGainLoss")
+                .map(numeric_to_f64)
                 .unwrap_or_default(),
             last_updated: row.get::<chrono::NaiveDateTime, _>("LastUpdated")
                 .map(|dt| dt.to_string())

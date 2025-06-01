@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
-
+//
 /// Request to buy an asset
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct BuyAssetRequest {

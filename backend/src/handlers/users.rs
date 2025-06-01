@@ -1,5 +1,5 @@
 use axum::{Json, extract::Path};
-use crate::{models::{User, ExtendedUser, CreateUserRequest, UpdateUserRequest, LoginRequest, LoginResponse, DepositRequest, WithdrawRequest, AllocateRequest, DeallocateRequest, UpgradePremiumRequest, FundOperationResponse, PremiumUpgradeResponse, AccountSummary, SetPaymentMethodRequest, PaymentMethodResponse, ManageSubscriptionRequest, SubscriptionResponse}, db};
+use crate::{models::{User, ExtendedUser, CreateUserRequest, UpdateUserRequest, LoginRequest, LoginResponse, DepositRequest, WithdrawRequest, AllocateRequest, DeallocateRequest, UpgradePremiumRequest, FundOperationResponse, PremiumUpgradeResponse, AccountSummary, SetPaymentMethodRequest, PaymentMethodResponse, ManageSubscriptionRequest, SubscriptionResponse, FundTransaction}, db};
 use tiberius::time::chrono;
 use uuid::Uuid;
 use jsonwebtoken::{encode, Header, EncodingKey};
@@ -14,10 +14,6 @@ fn numeric_to_f64(numeric: tiberius::numeric::Numeric) -> f64 {
     numeric.to_string().parse::<f64>().unwrap_or(0.0)
 }
 
-// Helper function to safely convert SQL Server integer to boolean
-fn int_to_bool(value: Option<i32>) -> bool {
-    value.unwrap_or(0) != 0
-}
 
 /// List all users
 #[utoipa::path(
@@ -155,23 +151,33 @@ pub async fn get_user_extended(Path(user_id): Path<Uuid>) -> Result<Json<Extende
         // Payment Method Fields
         payment_method_type: row.get::<&str, _>("PaymentMethodType").map(|s| s.to_string()),
         payment_method_details: row.get::<&str, _>("PaymentMethodDetails").map(|s| s.to_string()),
-        payment_method_expiry: row.get::<chrono::NaiveDate, _>("PaymentMethodExpiry")
-            .map(|d| d.format("%Y-%m-%d").to_string()),
+        payment_method_expiry: match row.try_get::<chrono::NaiveDate, _>("PaymentMethodExpiry") {
+            Ok(Some(d)) => Some(d.format("%Y-%m-%d").to_string()),
+            _ => None,
+        },
         payment_method_active: row.get::<bool, _>("PaymentMethodActive").unwrap_or(false),
         
         // Subscription Fields
         is_premium: row.get::<bool, _>("IsPremium").unwrap_or(false),
-        premium_start_date: row.get::<chrono::NaiveDateTime, _>("PremiumStartDate")
-            .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
-        premium_end_date: row.get::<chrono::NaiveDateTime, _>("PremiumEndDate")
-            .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+        premium_start_date: match row.try_get::<chrono::NaiveDateTime, _>("PremiumStartDate") {
+            Ok(Some(dt)) => Some(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            _ => None,
+        },
+        premium_end_date: match row.try_get::<chrono::NaiveDateTime, _>("PremiumEndDate") {
+            Ok(Some(dt)) => Some(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            _ => None,
+        },
         monthly_subscription_rate: row.get::<tiberius::numeric::Numeric, _>("MonthlySubscriptionRate")
             .map(numeric_to_f64),
         auto_renew_subscription: row.get::<bool, _>("AutoRenewSubscription").unwrap_or(false),
-        last_subscription_payment: row.get::<chrono::NaiveDateTime, _>("LastSubscriptionPayment")
-            .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
-        next_subscription_payment: row.get::<chrono::NaiveDateTime, _>("NextSubscriptionPayment")
-            .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+        last_subscription_payment: match row.try_get::<chrono::NaiveDateTime, _>("LastSubscriptionPayment") {
+            Ok(Some(dt)) => Some(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            _ => None,
+        },
+        next_subscription_payment: match row.try_get::<chrono::NaiveDateTime, _>("NextSubscriptionPayment") {
+            Ok(Some(dt)) => Some(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+            _ => None,
+        },
         
         // Calculated fields
         days_remaining_in_subscription: row.get::<i32, _>("DaysRemainingInSubscription").unwrap_or(0),
@@ -1016,4 +1022,219 @@ pub async fn manage_subscription(
             message: Some("Subscription updated successfully".to_string()),
         }))
     }
+}
+
+/// Get user fund transaction history using enhanced view
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/{userId}/fund-transactions",
+    tag = "users",
+    params(
+        ("userId" = String, Path, description = "User ID to fetch fund transaction history for")
+    ),
+    responses(
+        (status = 200, description = "Fund transaction history retrieved successfully", body = Vec<FundTransaction>),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error", body = String)
+    )
+)]
+pub async fn get_fund_transaction_history(
+    Path(user_id): Path<Uuid>
+) -> Result<Json<Vec<FundTransaction>>, (StatusCode, String)> {
+    let mut client = db::get_db_client().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
+
+    let tiberius_user_id = tiberius::Uuid::from_bytes(*user_id.as_bytes());
+
+    // Check if user exists
+    let check_query = "SELECT COUNT(*) as count FROM portfolio.Users WHERE UserID = @P1";
+    let stream = client.query(check_query, &[&tiberius_user_id]).await.map_err(|e|
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to check user existence: {}", e)))?;
+    
+    let result = stream.into_first_result().await.map_err(|e|
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch user check results: {}", e)))?;
+    
+    let count: i32 = result.first()
+        .and_then(|row| row.get("count"))
+        .unwrap_or(0);
+
+    if count == 0 {
+        return Err((StatusCode::NOT_FOUND, "User not found".to_string()));
+    }
+
+    // Use the enhanced fund transaction history view
+    let query = "SELECT * FROM portfolio.vw_FundTransactionHistory WHERE UserID = @P1 ORDER BY CreatedAt DESC";
+    let stream = client.query(query, &[&tiberius_user_id]).await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to execute query: {}", e)))?;
+    
+    let rows = stream.into_first_result().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch results: {}", e)))?;
+
+    let transactions = rows.into_iter().map(|row| {
+        FundTransaction {
+            fund_transaction_id: row.get("FundTransactionID").unwrap_or_default(),
+            user_id,
+            portfolio_id: row.get("PortfolioID"),
+            transaction_type: row.get::<&str, _>("TransactionType").unwrap_or("").to_string(),
+            amount: row.get::<tiberius::numeric::Numeric, _>("Amount")
+                .map(numeric_to_f64)
+                .unwrap_or_default(),
+            balance_after: row.get::<tiberius::numeric::Numeric, _>("BalanceAfter")
+                .map(numeric_to_f64)
+                .unwrap_or_default(),
+            description: row.get::<&str, _>("Description").map(|s| s.to_string()),
+            related_asset_transaction_id: row.get("RelatedAssetTransactionID"),
+            created_at: row.get::<chrono::NaiveDateTime, _>("CreatedAt")
+                .map(|dt| dt.to_string())
+                .unwrap_or_default(),
+        }
+    }).collect();
+
+    Ok(Json(transactions))
+}
+
+/// Get comprehensive user account summary using the enhanced view
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/{userId}/account-summary-enhanced",
+    tag = "users",
+    params(
+        ("userId" = String, Path, description = "User ID to fetch enhanced account summary for")
+    ),
+    responses(
+        (status = 200, description = "Enhanced account summary retrieved successfully", body = serde_json::Value),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error", body = String)
+    )
+)]
+pub async fn get_enhanced_account_summary(
+    Path(user_id): Path<Uuid>
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let mut client = db::get_db_client().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to connect to database: {}", e)))?;
+
+    let tiberius_user_id = tiberius::Uuid::from_bytes(*user_id.as_bytes());
+
+    // Use the enhanced user account summary view
+    let query = "SELECT * FROM portfolio.vw_UserAccountSummary WHERE UserID = @P1";
+    let stream = client.query(query, &[&tiberius_user_id]).await.map_err(|e| {
+        let error_msg = format!("{}", e);
+        if error_msg.contains("User not found") {
+            (StatusCode::NOT_FOUND, "User not found".to_string())
+        } else {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get enhanced account summary: {}", e))
+        }
+    })?;
+
+    let rows = stream.into_first_result().await.map_err(|e| 
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch enhanced account summary: {}", e)))?;
+
+    let row = rows.into_iter().next()
+        .ok_or((StatusCode::NOT_FOUND, "User not found".to_string()))?;
+
+    // Build comprehensive account summary
+    let mut summary = serde_json::Map::new();
+
+    // Basic user info
+    summary.insert("user_id".to_string(), serde_json::Value::String(user_id.to_string()));
+    summary.insert("name".to_string(), serde_json::Value::String(row.get::<&str, _>("Name").unwrap_or("").to_string()));
+    summary.insert("email".to_string(), serde_json::Value::String(row.get::<&str, _>("Email").unwrap_or("").to_string()));
+    summary.insert("country_of_residence".to_string(), serde_json::Value::String(row.get::<&str, _>("CountryOfResidence").unwrap_or("").to_string()));
+    summary.insert("user_type".to_string(), serde_json::Value::String(row.get::<&str, _>("UserType").unwrap_or("").to_string()));
+
+    // Financial information
+    summary.insert("account_balance".to_string(), serde_json::Value::Number(
+        serde_json::Number::from_f64(row.get::<tiberius::numeric::Numeric, _>("AccountBalance").map(numeric_to_f64).unwrap_or_default()).unwrap()
+    ));
+    summary.insert("total_funds_in_portfolios".to_string(), serde_json::Value::Number(
+        serde_json::Number::from_f64(row.get::<tiberius::numeric::Numeric, _>("TotalFundsInPortfolios").map(numeric_to_f64).unwrap_or_default()).unwrap()
+    ));
+    summary.insert("total_market_value".to_string(), serde_json::Value::Number(
+        serde_json::Number::from_f64(row.get::<tiberius::numeric::Numeric, _>("TotalMarketValue").map(numeric_to_f64).unwrap_or_default()).unwrap()
+    ));
+    summary.insert("total_net_worth".to_string(), serde_json::Value::Number(
+        serde_json::Number::from_f64(row.get::<tiberius::numeric::Numeric, _>("TotalNetWorth").map(numeric_to_f64).unwrap_or_default()).unwrap()
+    ));
+
+    // Payment method information
+    if let Some(payment_type) = row.get::<&str, _>("PaymentMethodType") {
+        summary.insert("payment_method_type".to_string(), serde_json::Value::String(payment_type.to_string()));
+    }
+    if let Some(payment_details) = row.get::<&str, _>("PaymentMethodDetails") {
+        summary.insert("payment_method_details".to_string(), serde_json::Value::String(payment_details.to_string()));
+    }
+    // Safely handle payment method expiry date which might be NULL
+    match row.try_get::<chrono::NaiveDate, _>("PaymentMethodExpiry") {
+        Ok(Some(payment_expiry)) => {
+            summary.insert("payment_method_expiry".to_string(), serde_json::Value::String(payment_expiry.to_string()));
+        },
+        _ => {} // Handle NULL or conversion error gracefully
+    }
+    summary.insert("payment_method_active".to_string(), serde_json::Value::Bool(
+        row.get::<bool, _>("PaymentMethodActive").unwrap_or(false)
+    ));
+
+    // Subscription information
+    summary.insert("is_premium".to_string(), serde_json::Value::Bool(
+        row.get::<bool, _>("IsPremium").unwrap_or(false)
+    ));
+    // Safely handle premium start date which might be NULL
+    match row.try_get::<chrono::NaiveDate, _>("PremiumStartDate") {
+        Ok(Some(premium_start)) => {
+            summary.insert("premium_start_date".to_string(), serde_json::Value::String(premium_start.to_string()));
+        },
+        _ => {} // Handle NULL or conversion error gracefully
+    }
+    // Safely handle premium end date which might be NULL
+    match row.try_get::<chrono::NaiveDate, _>("PremiumEndDate") {
+        Ok(Some(premium_end)) => {
+            summary.insert("premium_end_date".to_string(), serde_json::Value::String(premium_end.to_string()));
+        },
+        _ => {} // Handle NULL or conversion error gracefully
+    }
+    summary.insert("monthly_subscription_rate".to_string(), serde_json::Value::Number(
+        serde_json::Number::from_f64(row.get::<tiberius::numeric::Numeric, _>("MonthlySubscriptionRate").map(numeric_to_f64).unwrap_or_default()).unwrap()
+    ));
+    summary.insert("auto_renew_subscription".to_string(), serde_json::Value::Bool(
+        row.get::<bool, _>("AutoRenewSubscription").unwrap_or(false)
+    ));
+    
+    // Subscription status calculations
+    summary.insert("days_remaining_in_subscription".to_string(), serde_json::Value::Number(
+        serde_json::Number::from(row.get::<i32, _>("DaysRemainingInSubscription").unwrap_or(0))
+    ));
+    summary.insert("subscription_expired".to_string(), serde_json::Value::Bool(
+        row.get::<bool, _>("SubscriptionExpired").unwrap_or(false)
+    ));
+
+    // Portfolio statistics
+    summary.insert("total_portfolios".to_string(), serde_json::Value::Number(
+        serde_json::Number::from(row.get::<i32, _>("TotalPortfolios").unwrap_or(0))
+    ));
+
+    // Recent activity
+    // Safely handle last fund transaction date which might be NULL
+    match row.try_get::<chrono::NaiveDateTime, _>("LastFundTransactionDate") {
+        Ok(Some(last_fund_transaction)) => {
+            summary.insert("last_fund_transaction_date".to_string(), serde_json::Value::String(last_fund_transaction.to_string()));
+        },
+        _ => {} // Handle NULL or conversion error gracefully
+    }
+    // Safely handle last trade date which might be NULL
+    match row.try_get::<chrono::NaiveDateTime, _>("LastTradeDate") {
+        Ok(Some(last_trade)) => {
+            summary.insert("last_trade_date".to_string(), serde_json::Value::String(last_trade.to_string()));
+        },
+        _ => {} // Handle NULL or conversion error gracefully
+    }
+
+    // Account dates
+    summary.insert("created_at".to_string(), serde_json::Value::String(
+        row.get::<chrono::NaiveDateTime, _>("CreatedAt").map(|dt| dt.to_string()).unwrap_or_default()
+    ));
+    summary.insert("updated_at".to_string(), serde_json::Value::String(
+        row.get::<chrono::NaiveDateTime, _>("UpdatedAt").map(|dt| dt.to_string()).unwrap_or_default()
+    ));
+
+    Ok(Json(serde_json::Value::Object(summary)))
 } 

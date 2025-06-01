@@ -1,10 +1,10 @@
 [package]
 name = "backend"
-version = "0.1.2"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.8.4"
+axum = { version = "0.8.4", features = ["multipart"] }
 tokio = { version = "1", features = ["full"] }
 tiberius = { version = "0.12", features = ["tds73", "chrono"], default-features = false }
 tokio-util = { version = "0.7", features = ["compat"] }
@@ -21,3 +21,4 @@ tower-http = { version = "0.6.4", features = ["cors"] }
 uuid = { version = "1.7", features = ["serde", "v4"] }
 chrono = "0.4.41"
 rust_decimal = { version = "1.34", features = ["serde"] }
+csv = "1.3"  # For CSV parsing
