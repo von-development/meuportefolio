@@ -25,11 +25,7 @@ pub async fn get_db_client() -> Result<Client<tokio_util::compat::Compat<TcpStre
     config.database(&db_name);
     
     // For debugging - log connection details (without password)
-    println!("=== Database Connection Details ===");
-    println!("Host: {}", db_host);
-    println!("Port: {}", db_port);
-    println!("User: {}", db_user);
-    println!("Database: {}", db_name);
+    println!("=== Database Connection ===");
     println!("===================================");
 
     let tcp = TcpStream::connect(config.get_addr()).await?;
