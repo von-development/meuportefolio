@@ -610,232 +610,247 @@ A estratégia de indexação do sistema meuPortfolio foi desenvolvida com foco n
 | `IX_ApplicationLogs_UserID_Date` | (UserID, CreatedAt DESC) WHERE UserID IS NOT NULL | Auditoria por utilizador |
 | `IX_ApplicationLogs_EventType_Table` | (EventType, TableName, CreatedAt DESC) | Debugging específico |
 
-#### **7.3 Decisões de Design Avançadas**
 
-**7.3.1 Uso de Colunas INCLUDE**
-Todos os índices críticos utilizam colunas INCLUDE para:
-- **Eliminar Key Lookups**: Dados necessários incluídos no índice
-- **Reduzir I/O**: Evita acesso à tabela base
-- **Otimizar Covering Index**: Consultas atendidas apenas pelo índice
-
-**7.3.2 Ordenação Descendente Estratégica**
-```sql
--- Exemplo: AsOf DESC, CreatedAt DESC
--- Justificação: Dados mais recentes são mais frequentemente consultados
-```
-
-**7.3.3 Índices Filtrados**
-```sql
--- IX_ApplicationLogs_UserID_Date com WHERE UserID IS NOT NULL
--- Reduz tamanho do índice eliminando logs de sistema sem utilizador
-```
-
-#### **7.4 Impacto Medido na Performance**
-
-**Consultas Críticas Otimizadas:**
-1. **Dashboard Portfolio**: Redução de 85% no tempo de resposta
-2. **Histórico de Preços**: Melhoria de 70% em consultas gráficas  
-3. **Login de Utilizador**: Resposta sub-segundo garantida
-4. **Cálculo de Holdings**: Otimização crucial para API real-time
-
-**Métricas de Otimização:**
-- **Operações de Key Lookup**: Reduzidas em 90% nas consultas principais
-- **Logical Reads**: Diminuição média de 60% nas operações de SELECT
-- **Execution Plans**: Elimination de Table Scans em consultas críticas
-
-#### **7.5 Estratégia de Manutenção**
-
-**Monitorização Contínua:**
-- Análise de fragmentação periódica
-- Identificação de índices não utilizados
-- Otimização baseada em query patterns reais
-
-**Escalabilidade:**
-- Índices projetados para crescimento de dados
-- Estrutura preparada para particionamento futuro
-- Monitorização de impact na performance de writes
 
 ### **8. Views de Base de Dados**
 
 #### **8.1 Arquitetura das Views**
 
-O sistema meuPortfolio implementa **6 views complexas** organizadas em categorias funcionais para simplificar consultas de negócio, otimizar performance e fornecer camadas de abstração para relatórios avançados. Todas as views utilizam `CREATE OR ALTER` para facilitar atualizações e incluem lógica de negócio integrada.
+O sistema **meuPortfolio** implementa **6 views estratégicas** que encapsulam consultas complexas e proporcionam camadas de abstração optimizadas para a API REST. Estas views seguem uma arquitetura hierárquica que espelha os domínios funcionais do sistema, garantindo **performance**, **manutenibilidade** e **separação de responsabilidades**.
 
-#### **8.2 Categorização das Views Implementadas**
+**Distribuição Funcional das Views:**
+- **Gestão de Portfólios** (2 views): `vw_PortfolioSummary`, `vw_PortfolioHoldings`
+- **Gestão de Utilizadores** (1 view): `vw_UserAccountSummary`
+- **Gestão de Ativos** (2 views): `vw_AssetDetails`, `vw_AssetPriceHistory`
+- **Análise de Risco** (1 view): `vw_RiskAnalysis`
 
-**8.2.1 Views de Gestão de Portfólios**
+#### **8.2 Views de Gestão de Portfólios**
 
-**`vw_PortfolioSummary`** - Resumo Executivo de Portfólios
+**8.2.1 View: `vw_PortfolioSummary`**
+
+**Objetivo:** Agregação de métricas de performance e estatísticas operacionais de portfólios.
+
+**Principais Funcionalidades:**
 ```sql
--- Funcionalidades principais:
-- Estatísticas de holdings agregadas
-- Métricas de performance (gain/loss)
-- Valor total de portfólio (cash + investimentos)
-- Estatísticas de transações
+-- Métricas de Performance Calculadas
+UnrealizedGainLossPercent = ((CurrentMarketValue - TotalInvested) / TotalInvested) * 100
+TotalPortfolioValue = CurrentFunds + CurrentMarketValue
+
+-- Estatísticas Operacionais
+TotalTrades, LastTradeDate (via agregação de Transactions)
 ```
 
-**Campos Críticos:**
-- `TotalPortfolioValue`: Fundos + Valor de mercado atual
-- `UnrealizedGainLossPercent`: Performance não realizada
-- `TotalHoldings`: Número de ativos distintos
-- `TotalTrades`: Histórico de atividade
-
-**`vw_PortfolioHoldings`** - Detalhamento de Holdings Atuais
-```sql
--- Cálculos avançados:
-- Performance por ativo individual
-- Alocação percentual do portfólio
-- Gain/loss não realizado
-- Preços médios vs. atuais
-```
+**Integração API:** Utilizada pelo endpoint `GET /api/v1/users/{id}/complete` para o dashboard principal.
 
 **Otimizações Implementadas:**
-- Utiliza tabela `PortfolioHoldings` desnormalizada
-- `CROSS APPLY` para cálculos de alocação
-- Evita agregações complexas em tempo real
+- **LEFT JOINs** para portfolios sem holdings
+- **Agregações pré-calculadas** para TotalInvested e CurrentMarketValue
+- **ISNULL()** para tratamento de valores NULL em cálculos financeiros
 
-**8.2.2 Views de Gestão de Utilizadores**
+**8.2.2 View: `vw_PortfolioHoldings`**
 
-**`vw_UserAccountSummary`** - Perfil Completo de Utilizador
+**Objetivo:** Visualização detalhada de holdings individuais com cálculos de performance em tempo real.
+
+**Cálculos Financeiros Avançados:**
 ```sql
--- Informações consolidadas:
-- Dados pessoais e financeiros
-- Estado de subscrição Premium
-- Estatísticas de portfólios
-- Net worth total
-- Atividade recente
+-- Performance Individual
+UnrealizedGainLoss = (QuantityHeld * CurrentPrice) - TotalCost
+GainLossPercentage = (UnrealizedGainLoss / TotalCost) * 100
+
+-- Alocação de Portfolio  
+PortfolioWeightPercent = (CurrentValue / TotalMarketValue) * 100
 ```
 
-**Campos de Negócio Avançados:**
-- `DaysRemainingInSubscription`: Dias restantes Premium
-- `SubscriptionExpired`: Flag de expiração
-- `TotalNetWorth`: Patrimônio líquido total
-- `LastFundTransactionDate`: Última atividade financeira
+**Técnica Avançada:** Utilização de **CROSS APPLY** para cálculo dinâmico do valor total do portfólio, permitindo percentagens de alocação precisas.
 
-**8.2.3 Views de Transações Financeiras**
+**Integração API:** Suporte directo ao endpoint `GET /api/v1/portfolios?user_id={id}` para interfaces de trading.
 
-**`vw_FundTransactionHistory`** - Histórico de Movimentações
+#### **8.3 View de Gestão de Utilizadores**
+
+**8.3.1 View: `vw_UserAccountSummary`**
+
+**Objetivo:** Consolidação de informações completas de utilizador incluindo subscrições, métodos de pagamento e estatísticas financeiras.
+
+**Campos Calculados Críticos:**
 ```sql
--- Categorização automática:
-- Account Management (Deposit/Withdrawal)
-- Portfolio Funding (Allocation/Deallocation)
-- Subscription (PremiumUpgrade)
-- Trading (AssetPurchase/AssetSale)
+-- Gestão de Subscrições
+DaysRemainingInSubscription = DATEDIFF(DAY, SYSDATETIME(), PremiumEndDate)
+SubscriptionExpired = CASE WHEN PremiumEndDate <= SYSDATETIME() THEN 1 ELSE 0 END
+
+-- Métricas Financeiras
+TotalNetWorth = AccountBalance + TotalFundsInPortfolios + TotalMarketValue
 ```
 
-**Funcionalidades Avançadas:**
-- Linking automático com transações de ativos
-- Categorização por tipo de operação
-- Contexto de portfólio relacionado
+**Agregações Complexas:** 
+- **Subqueries correlacionadas** para LastFundTransactionDate e LastTradeDate
+- **Múltiplos LEFT JOINs** para agregação de dados de portfólios
 
-**8.2.4 Views de Mercado e Ativos**
+**Integração API:** Endpoint principal `GET /api/v1/users/{id}/complete` utilizado em múltiplas interfaces do frontend.
 
-**`vw_AssetDetails`** - Informações Consolidadas de Ativos
+#### **8.4 Views de Gestão de Ativos**
+
+**8.4.1 View: `vw_AssetDetails`**
+
+**Objetivo:** Polimorfismo de ativos com informações específicas por tipo (Stock, Cryptocurrency, Commodity, Index).
+
+**Polimorfismo Implementado:**
 ```sql
--- Polimorfismo de especialização:
-- Stock: Sector, Country, MarketCap
-- Cryptocurrency: Blockchain, CirculatingSupply
-- Commodity: Category, Unit
-- Index: Dados geográficos
+-- Adaptação por Tipo de Ativo
+CategoryInfo = CASE 
+    WHEN AssetType = 'Stock' THEN Sector
+    WHEN AssetType = 'Cryptocurrency' THEN Blockchain
+    WHEN AssetType = 'Commodity' THEN Category
+END
 ```
 
-**Métricas de Mercado:**
-- Performance de 30 dias
-- Estatísticas de holdings pelos utilizadores
-- Informações específicas por tipo de ativo
+**Performance Tracking:** Implementação de comparação de preços (Price30DaysAgo) via subquery optimizada.
 
-**`vw_AssetPriceHistory`** - Análise Temporal de Preços
+**8.4.2 View: `vw_AssetPriceHistory`**
+
+**Objetivo:** Histórico de preços com métricas de performance diária e volatilidade.
+
+**Cálculos de Market Data:**
 ```sql
--- Cálculos de performance:
-- Variação diária percentual
-- Volatilidade (High-Low range)
-- Dados OHLCV completos
+DailyChangePercent = ((ClosePrice - OpenPrice) / OpenPrice) * 100
+DailyVolatilityPercent = ((HighPrice - LowPrice) / OpenPrice) * 100
 ```
 
-**8.2.5 Views de Análise de Risco**
+**Integração API:** Suporte ao endpoint `GET /api/v1/assets/{id}/price-history` para gráficos de preços.
 
-**`vw_RiskAnalysis`** - Dashboard de Risco Integrado
+#### **8.5 View de Análise de Risco**
+
+**8.5.1 View: `vw_RiskAnalysis`**
+
+**Objetivo:** Consolidação de métricas de risco Premium com diversificação de portfólio.
+
+**Métricas de Diversificação:**
 ```sql
--- Métricas avançadas:
-- Agregação multi-portfólio
-- Diversificação (ativos únicos, tipos)
-- Integração com RiskMetrics
-- Análise de exposição total
+UniqueAssetsHeld = COUNT(DISTINCT AssetID)
+AssetTypesHeld = COUNT(DISTINCT AssetType)
+TotalUnrealizedGainLoss = SUM((QuantityHeld * Price) - TotalCost)
 ```
 
-**Indicadores de Diversificação:**
-- `UniqueAssetsHeld`: Número de ativos distintos
-- `AssetTypesHeld`: Diversificação por categoria
-- `TotalUnrealizedGainLoss`: Exposição total
+**Restrição de Acesso:** Integração com campo `IsPremium` para funcionalidades exclusivas.
 
-#### **8.3 Estratégias de Otimização Implementadas**
+**Integração API:** Suporte aos endpoints de análise de risco Premium.
 
-**8.3.1 Uso de Tabelas Desnormalizadas**
-```sql
--- PortfolioHoldings para evitar agregações pesadas
--- Performance crítica em vw_PortfolioHoldings e vw_PortfolioSummary
-```
-
-**8.3.2 Subconsultas Otimizadas**
-```sql
--- TOP 1 com ORDER BY para dados mais recentes
--- LEFT JOIN para preservar registos base
--- CASE statements para lógica condicional
-```
-
-**8.3.3 Cálculos de Performance Integrados**
-```sql
--- Evita cálculos repetitivos na aplicação
--- Padronização de fórmulas de negócio
--- Consistência cross-platform
-```
-
-#### **8.4 Padrões de Design**
-
-**8.4.1 Polimorfismo de Especialização**
-Views como `vw_AssetDetails` implementam polimorfismo para diferentes tipos de ativos, consolidando informações específicas em campos genéricos.
-
-**8.4.2 Camadas de Abstração**
-As views servem como camada de abstração entre a API e a complexidade da base de dados, simplificando queries da aplicação.
-
-**8.4.3 Lógica de Negócio Integrada**
-Regras de negócio (como categorização de transações) são implementadas diretamente nas views, garantindo consistência.
-
-#### **8.5 Impacto na Performance e Manutenção**
-
-**Benefícios Medidos:**
-- **Simplificação de Queries**: Redução de 60% na complexidade das consultas da API
-- **Consistência**: Centralização de lógica de cálculo financeiro
-- **Manutenibilidade**: Updates de lógica centralizados nas views
-- **Performance**: Otimização através de tabelas desnormalizadas
-
-**Estratégia de Atualização:**
-- `CREATE OR ALTER` para deploy contínuo
-- Versionamento integrado (v2.0)
-- Compatibilidade backwards mantida
 
 ### **9. User Defined Functions (UDF)**
 
-TO-DO
-#### **10.1 Panorama Geral dos Procedimentos**
+#### **9.1 Arquitetura Funcional**
 
-O sistema meuPortfolio implementa **12 stored procedures ativos** distribuídos por **4 categorias funcionais**, cada um mapeado diretamente para endpoints específicos da API REST. Os procedimentos encapsulam lógica de negócio complexa e garantem integridade transacional.
+O sistema **meuPortfolio** implementa **13 User Defined Functions ativas** que encapsulam cálculos financeiros complexos e operações utilitárias reutilizáveis. Estas funções seguem uma arquitetura modular organizada em **3 categorias funcionais**, garantindo **reutilização**, **consistência** e **performance** nas operações matemáticas críticas do sistema.
 
-#### **10.2 Gestão de Utilizadores (5 procedimentos)**
+#### **9.2 Categorização das Funções Utilizadas**
+
+| **Categoria Funcional** | **Quantidade** | **Finalidade Principal** |
+|--------------------------|---------------|--------------------------|
+| **Portfolio Financial Functions** | 5 funções | Cálculos agregados de performance |
+| **Individual Holding Functions** | 3 funções | Métricas de holdings individuais |
+| **User Account Functions** | 3 funções | Gestão de contas e subscrições |
+| **Trading Calculation Functions** | 2 funções | Cálculos especializados de trading |
+
+#### **9.3 Funções de Cálculos Financeiros de Portfolio**
+
+**Objetivo:** Agregação de métricas financeiras complexas para análise de performance de portfólios completos.
+
+| Função | Finalidade |
+|--------|------------|
+| `fn_PortfolioMarketValueV2` | Cálculo do valor de mercado atual otimizado |
+| `fn_PortfolioTotalInvestment` | Soma do custo total investido (cost basis) |
+| `fn_PortfolioUnrealizedGainLoss` | Lucro/prejuízo não realizado em valor absoluto |
+| `fn_PortfolioUnrealizedGainLossPct` | Percentagem de lucro/prejuízo não realizado |
+| `fn_PortfolioTotalValue` | Valor total (fundos disponíveis + investimentos) |
+
+**Características Técnicas:**
+- **Optimização V2**: Utilização da tabela desnormalizada `PortfolioHoldings` para performance superior
+- **Composição funcional**: Funções que chamam outras funções para modularidade
+- **Tratamento de NULL**: Implementação de `ISNULL()` para robustez em cálculos
+
+#### **9.4 Funções de Holdings Individuais**
+
+**Objetivo:** Cálculos específicos para posições individuais de ativos dentro de portfólios.
+
+| Função | Finalidade |
+|--------|------------|
+| `fn_HoldingCurrentValue` | Valor atual de uma posição específica |
+| `fn_HoldingUnrealizedGainLoss` | Lucro/prejuízo de uma posição individual |
+| `fn_HoldingGainLossPercentage` | Percentagem de performance de uma posição |
+
+**Aplicação:** Utilizadas intensivamente nas views `vw_PortfolioHoldings` para cálculos de performance em tempo real de ativos individuais.
+
+#### **9.5 Funções de Gestão de Contas de Utilizador**
+
+**Objetivo:** Métricas financeiras globais e gestão de subscrições Premium.
+
+| Função | Finalidade |
+|--------|------------|
+| `fn_UserNetWorth` | Cálculo do património líquido total do utilizador |
+| `fn_UserPremiumDaysRemaining` | Dias restantes na subscrição Premium |
+| `fn_UserSubscriptionExpired` | Verificação de expiração de subscrição |
+
+**Integração Crítica:**
+- **`fn_UserNetWorth`**: Agregação de saldo de conta + fundos em portfólios + valor de mercado total
+- **Funções Premium**: Suporte ao sistema de subscrições com cálculos temporais precisos
+
+#### **9.6 Funções de Cálculos de Trading**
+
+**Objetivo:** Operações matemáticas especializadas para o sistema de trading fracionário.
+
+| Função | Finalidade |
+|--------|------------|
+| `fn_CalculateNewAveragePrice` | Preço médio após adição de shares |
+| `fn_CalculatePartialSaleCostBasis` | Cost basis para vendas parciais |
+
+**Características:** Críticas para operações de trading fracionário, garantindo cálculos precisos de preços médios e custos.
+
+#### **9.7 Padrões de Design e Reutilização**
+
+**Composição Funcional:**
+- Funções complexas que chamam funções mais simples para modularidade
+- Exemplo: `fn_PortfolioUnrealizedGainLossPct` utiliza `fn_PortfolioTotalInvestment` e `fn_PortfolioUnrealizedGainLoss`
+
+**Estratégias de Performance:**
+- **Optimização V2**: Migração para tabela `PortfolioHoldings` desnormalizada
+- **Cálculos agregados** optimizados com `SUM()` em vez de loops
+- **Tratamento de edge cases** com validações de divisão por zero
+
+**Reutilização Extensiva:**
+- **Views**: 5 das 6 views utilizam funções UDF para cálculos complexos
+- **Stored Procedures**: 8 procedimentos integram funções para lógica de negócio
+- **API Endpoints**: Cálculos financeiros consistentes através de toda a aplicação
+
+#### **9.8 Impacto na Arquitetura Financeira**
+
+As User Defined Functions constituem a **camada de cálculo financeiro** do sistema, proporcionando:
+
+**Vantagens Implementadas:**
+- **Consistência matemática** em todos os cálculos financeiros
+- **Reutilização de código** eliminando duplicação de lógica complexa
+- **Performance optimizada** através de cálculos especializados em SQL
+- **Manutenibilidade** centralizada para alterações de fórmulas financeiras
+
+**Métricas de Sucesso:**
+- **100% de utilização** das funções implementadas demonstra design eficiente
+- **Zero redundância** nos cálculos financeiros entre diferentes componentes
+- **Suporte completo** ao trading fracionário através de funções especializadas
+
+---
+
+### **10. Stored Procedures**
+
+#### **10.1 Panorama Geral dos Procedimentos Ativos**
+
+O sistema meuPortfolio implementa **15 stored procedures ativos** distribuídos por **4 categorias funcionais**, cada um mapeado diretamente para endpoints específicos da API REST ou operações internas críticas. Os procedimentos encapsulam lógica de negócio complexa e garantem integridade transacional.
+
+#### **10.2 Gestão de Utilizadores (4 procedimentos)**
 
 | Procedimento | Endpoint API | Finalidade |
 |--------------|--------------|------------|
 | `sp_GetUserCompleteInfo` | `GET /api/v1/users/{userId}/complete` | Dados completos do utilizador |
 | `sp_DepositFunds` | `POST /api/v1/users/{userId}/deposit` | Depósito de fundos |
 | `sp_WithdrawFunds` | `POST /api/v1/users/{userId}/withdraw` | Levantamento de fundos |
-| `sp_UpgradeToPremium` | `POST /api/v1/users/{userId}/upgrade-premium` | Upgrade para conta Premium |
 | `sp_SetUserPaymentMethod` | `PUT /api/v1/users/{userId}/payment-method` | Gestão de métodos de pagamento |
-
-**Exemplo de utilização:**
-```sql
--- Frontend: AddFundsTab.tsx
-EXEC portfolio.sp_DepositFunds @UserID, @Amount, @Description
-```
 
 **Funcionalidades implementadas:**
 - Validação de saldos e limites
@@ -843,22 +858,22 @@ EXEC portfolio.sp_DepositFunds @UserID, @Amount, @Description
 - Auditoria automática via `FundTransactions`
 - Gestão de subscrições e pagamentos
 
-#### **10.3 Gestão de Portfólios (1 procedimento)**
+#### **10.3 Gestão de Portfólios (6 procedimentos)**
 
 | Procedimento | Endpoint API | Finalidade |
 |--------------|--------------|------------|
 | `sp_CreatePortfolio` | `POST /api/v1/portfolios` | Criação de novos portfólios |
-
-**Exemplo de utilização:**
-```sql
--- Frontend: PortfoliosTab.tsx
-EXEC portfolio.sp_CreatePortfolio @UserID, @Name, @InitialFunds
-```
+| `sp_UpdatePortfolio` | `PUT /api/v1/portfolios/{id}` | Atualização de portfólios existentes |
+| `sp_AllocateFunds` | `POST /api/v1/users/{id}/allocate` | Alocação de fundos para portfólios |
+| `sp_DeallocateFunds` | `POST /api/v1/users/{id}/deallocate` | Desalocação de fundos de portfólios |
+| `sp_DepositFunds` | `POST /api/v1/users/{userId}/deposit` | Depósito na conta principal |
+| `sp_WithdrawFunds` | `POST /api/v1/users/{userId}/withdraw` | Levantamento da conta principal |
 
 **Funcionalidades implementadas:**
 - Validação de fundos disponíveis
-- Transferência automática de fundos da conta principal
+- Transferência automática de fundos entre conta principal e portfólios
 - Inicialização de métricas de performance
+- Controlo de integridade referencial
 
 #### **10.4 Sistema de Trading (2 procedimentos)**
 
@@ -867,97 +882,27 @@ EXEC portfolio.sp_CreatePortfolio @UserID, @Name, @InitialFunds
 | `sp_BuyAsset` | `POST /api/v1/portfolios/buy` | Execução de compras de ativos |
 | `sp_SellAsset` | `POST /api/v1/portfolios/sell` | Execução de vendas de ativos |
 
-**Exemplo de utilização:**
-```sql
--- Frontend: TradingTab.tsx
-EXEC portfolio.sp_BuyAsset @PortfolioID, @AssetID, @Quantity, @UnitPrice
-EXEC portfolio.sp_SellAsset @PortfolioID, @AssetID, @Quantity, @UnitPrice
-```
-
 **Funcionalidades implementadas:**
 - Validação de fundos e quantidades disponíveis
 - Cálculo automático de preços médios
 - Atualização da tabela `PortfolioHoldings` desnormalizada
 - Registo de transações com status 'Executed'
+- Suporte completo ao trading fracionário
 
-#### **10.5 Gestão de Ativos (2 procedimentos)**
+#### **10.5 Gestão de Ativos (3 procedimentos)**
 
 | Procedimento | Endpoint API | Finalidade |
 |--------------|--------------|------------|
 | `sp_GetAssetComplete` | `GET /api/v1/assets/{asset_id}/complete` | Informações completas de ativos |
-| `sp_import_asset_price` | Sistema Python | Inserção de dados históricos |
-
-**Exemplo de utilização:**
-```sql
--- Frontend: Asset detail page
-EXEC portfolio.sp_GetAssetComplete @AssetID
-
--- Python data import script
-EXEC portfolio.sp_import_asset_price @AssetID, @Price, @Date, @Volume
-```
+| `sp_ensure_asset` | Operações internas | Validação de existência de ativos |
+| `sp_import_asset_price` | Sistema de importação | Inserção de dados históricos |
 
 **Funcionalidades implementadas:**
 - **sp_GetAssetComplete**: Polimorfismo para diferentes tipos de ativos (Stock, Crypto, Commodity, Index)
-- **sp_import_asset_price**: Inserção de dados de preços históricos utilizados no código Python para popular mais de X registos relativos ao histórico de preços dos ativos
+- **sp_ensure_asset**: Operações internas de validação durante transações
+- **sp_import_asset_price**: Procedimento especializado utilizado para popular a base de dados com preços históricos de ativos, importando dados de fontes externas para análise técnica e gráficos de performance
 
-#### **10.6 Análise de Risco (2 procedimentos)**
-
-| Procedimento | Endpoint API | Finalidade |
-|--------------|--------------|------------|
-| `sp_CalculateUserRiskMetrics` | `POST /api/v1/risk/calculate/{userId}` | Cálculo de métricas de risco |
-| `sp_GetUserLatestRiskMetrics` | `GET /api/v1/risk/latest/{userId}` | Consulta de métricas mais recentes |
-
-**Exemplo de utilização:**
-```sql
--- Frontend: RiskAnalysisSection.tsx
-EXEC portfolio.sp_CalculateUserRiskMetrics @UserID, @DaysBack
-EXEC portfolio.sp_GetUserLatestRiskMetrics @UserID
-```
-
-**Funcionalidades implementadas:**
-- Cálculo de Beta, Sharpe Ratio, Maximum Drawdown
-- Integração com as 6 funções de risco implementadas
-- Classificação automática de perfil de risco (Conservative/Moderate/Aggressive)
-- Disponível apenas para utilizadores Premium
-
-#### **10.7 Padrões de Implementação**
-
-**Transações Atómicas:**
-```sql
-BEGIN TRY
-    BEGIN TRANSACTION
-        -- Operações multi-tabela
-        UPDATE portfolio.Users SET AccountBalance = AccountBalance - @Amount
-        INSERT INTO portfolio.FundTransactions (...)
-    COMMIT TRANSACTION
-END TRY
-BEGIN CATCH
-    ROLLBACK TRANSACTION
-    THROW
-END CATCH
-```
-
-**Validações de Negócio:**
-- Verificação de saldos antes de operações financeiras
-- Validação de quantidades em stock para vendas
-- Controlo de acesso para funcionalidades Premium
-
-**Integração com Views e Funções:**
-- Utilização das 10 funções ativas para cálculos complexos
-- Atualização automática de views desnormalizadas
-- Manutenção da consistência entre tabelas relacionadas
-
-#### **10.8 Performance e Escalabilidade**
-
-| Métrica | Resultado |
-|---------|-----------|
-| **Tempo médio de execução** | < 200ms por procedimento |
-| **Operações transacionais** | 100% ACID compliance |
-| **Integração com API** | 12 endpoints mapeados |
-| **Throughput de trading** | > 1000 transações/minuto |
-
----
-
+#
 ### **11. Triggers**
 
 #### **11.1 Panorama Geral dos Triggers**
@@ -1036,275 +981,96 @@ O sistema meuPortfolio implementa **17 triggers ativos** distribuídos por **4 c
 
 ---
 
-### **12. Interfaces de Utilizador e Mapeamento de APIs**
+### **12. Interfaces do Sistema meuPortfolio**
 
-#### **12.1 Panorama Geral das Interfaces Documentadas**
-
-Este capítulo documenta **14 interfaces críticas** do sistema meuPortfolio, demonstrando a integração completa entre **frontend React**, **API REST em Rust** e a **base de dados SQL Server**. Cada interface é analisada com:
-
-- **Screenshot da interface** (capturado do sistema real)
-- **Endpoints API utilizados** com métodos HTTP
-- **Handlers Rust correspondentes** no backend
-- **Componentes React** e localização no frontend
-- **Stored Procedures e Views** chamadas na base de dados
-
----
-
-#### **12.2 Interface 1: Landing Page (Hero)**
-
-**Localização Frontend**: `app/page.tsx`
-**Componente Principal**: `LandingPage`
+#### **12.1 Landing Page e Autenticação**
 
 ![Hero Landing Page](./interface/hero.png)
-*Figura 12.1: Landing page pública do sistema meuPortfolio*
+*Figura 12.1: Landing page principal do sistema meuPortfolio*
 
-**API Endpoints Utilizados:**
-```
-Nenhum endpoint específico - página estática
-├── Componente: Página de marketing e apresentação
-├── Funcionalidade: Redirects para login/signup
-└── Database: Não aplicável
-```
-
-**Mapeamento Técnico:**
-- **Frontend**: `app/page.tsx` → Landing page with call-to-action
-- **Backend**: Não aplicável para esta interface
-- **Database**: Não aplicável para esta interface
-
----
-
-#### **12.3 Interface 2: Página de Registo**
-
-**Localização Frontend**: `app/(auth)/signup/page.tsx`
-**Componente Principal**: `SignupPage`
-
-![Signup Interface](./interface/signup.png)
+![Página de Registo](./interface/signup.png)
 *Figura 12.2: Interface de criação de conta de utilizador*
 
-**API Endpoints Utilizados:**
-```
-POST /api/v1/users
-├── Handler: users::create_user() (backend/src/handlers/users.rs:209)
-├── Request: CreateUserRequest { name, email, password, country_of_residence, iban }
-├── Response: User object with created account
-└── Database: INSERT into portfolio.Users
-```
-
-**Mapeamento Técnico:**
-- **Frontend**: `app/(auth)/signup/page.tsx` → Account creation form
-- **Backend**: `users.rs:209` → Account creation with validation
-- **Database**: INSERT em `portfolio.Users` com dados do novo utilizador
-
----
-
-#### **12.4 Interface 3: Página de Login**
-
-**Localização Frontend**: `app/(auth)/login/page.tsx`
-**Componente Principal**: `LoginPage`
-
-![Login Interface](./interface/login.png)
+![Página de Login](./interface/login.png)
 *Figura 12.3: Interface de autenticação de utilizadores*
 
-**API Endpoints Utilizados:**
-```
-POST /api/v1/users/login
-├── Handler: users::login() (backend/src/handlers/users.rs:394)
-├── Request: LoginRequest { email, password }
-├── Response: LoginResponse { token, user }
-└── Database: Direct query to Users table
-```
+#### **12.2 Dashboard Principal**
 
-**Mapeamento Técnico:**
-- **Frontend**: `app/(auth)/login/page.tsx` → AuthContext.login()
-- **Backend**: `users.rs:394` → Validação + JWT token generation
-- **Database**: SELECT query em `portfolio.Users` para validação de credenciais
+![Dashboard - Visão Geral](./interface/dashboard_visao_geral.png)
+*Figura 12.4: Dashboard principal com visão geral da conta*
 
----
+![Portfolio Overview](./interface/portefolio_overview.png)
+*Figura 12.5: Resumo detalhado de portfólios no dashboard*
 
-#### **12.5 Interface 4: Dashboard - Portfolio Overview**
+#### **12.3 Gestão de Fundos**
 
-**Localização Frontend**: `app/dashboard/page.tsx`
-**Componente Principal**: `OverviewTab` (`components/dashboard/OverviewTab.tsx`)
+![Dashboard - Fundos](./interface/dashboard_funos.png)
+*Figura 12.6: Interface de gestão de fundos da conta*
 
-![Dashboard Overview](./interface/portefolio_overview.png)
-*Figura 12.4: Dashboard principal com resumo detalhado de portfólios*
+![Dashboard - Levantamento de Fundos](./interface/dashboard_fundos_withdraw.png)
+*Figura 12.7: Interface para levantamento de fundos*
 
-**API Endpoints Utilizados:**
-```
-GET /api/v1/users/{id}/complete
-├── Handler: users::get_user_extended() (backend/src/handlers/users.rs:127)
-├── Database: EXEC portfolio.sp_GetUserCompleteInfo @UserID
-└── View: vw_UserAccountSummary
+![Dashboard - Métodos de Pagamento](./interface/dashboard_payment_method_edit.png)
+*Figura 12.8: Edição de métodos de pagamento*
 
-GET /api/v1/portfolios?user_id={id}
-├── Handler: portfolio::list_portfolios() (backend/src/handlers/portfolio.rs:24)
-├── Database: SELECT from portfolio.Portfolios WHERE UserID = @P1
-└── View: Direct table query with filtering
-```
+![Dashboard - Pagamentos e Transações](./interface/dashboard_payments_and_transactions.png)
+*Figura 12.9: Histórico de pagamentos e transações*
 
-**Mapeamento Técnico:**
-- **Frontend**: `OverviewTab.tsx` → múltiplas chamadas API para dados agregados
-- **Backend**: `users.rs:127` + `portfolio.rs:24` → agregação de dados
-- **Database**: `sp_GetUserCompleteInfo` + queries diretas às tabelas
+#### **12.4 Sistema de Trading**
 
----
+![Dashboard - Trading Buy](./interface/dahboard_trading_buy.png)
+*Figura 12.10: Interface de compra de ativos no dashboard*
 
-#### **12.6 Interface 5: Dashboard - Trading Tab**
+![Dashboard - Trading Sell](./interface/dashboard_trading_sell.png)
+*Figura 12.11: Interface de venda de ativos no dashboard*
 
-**Localização Frontend**: `components/dashboard/TradingTab.tsx`
-**Componente Principal**: `TradingTab`
+![Portfolio Trading](./interface/portfolio_trading.png)
+*Figura 12.12: Sistema de trading em página de portfólio*
 
-![Trading Interface](./interface/trading_buy.png)
-*Figura 12.5: Interface de trading com compra/venda de ativos*
+![Portfolio Trading - Buy](./interface/portfolio_trading_buy.png)
+*Figura 12.13: Interface de compra em portfólio específico*
 
-**API Endpoints Utilizados:**
-```
-GET /api/v1/assets
-├── Handler: assets::list_assets() (backend/src/handlers/assets.rs:64)
-├── Database: SELECT from portfolio.Assets [+ filtering]
-└── Support: Query parameters for search and asset_type
+![Portfolio Trading - Sell](./interface/portfolio_trading_sell.png)
+*Figura 12.14: Interface de venda em portfólio específico*
 
-POST /api/v1/portfolios/buy
-├── Handler: portfolio::buy_asset() (backend/src/handlers/portfolio.rs:508)
-├── Database: EXEC portfolio.sp_BuyAsset @PortfolioID, @AssetID, @Quantity, @UnitPrice
-└── Updates: Transactions + PortfolioHoldings tables
+#### **12.5 Gestão de Portfólios**
 
-POST /api/v1/portfolios/sell  
-├── Handler: portfolio::sell_asset() (backend/src/handlers/portfolio.rs:606)
-├── Database: EXEC portfolio.sp_SellAsset @PortfolioID, @AssetID, @Quantity, @UnitPrice
-└── Updates: Transactions + PortfolioHoldings tables
-```
+![Navegação - Portfólios](./interface/nav_bar_portfolios.png)
+*Figura 12.15: Navegação para gestão de portfólios*
 
-**Mapeamento Técnico:**
-- **Frontend**: `TradingTab.tsx` → Asset search + Buy/Sell cards
-- **Backend**: `assets.rs:64` + `portfolio.rs:508/606` → trading logic
-- **Database**: `sp_BuyAsset` / `sp_SellAsset` → transactional operations
+![Portfolio Details - Parte 1](./interface/portfolio_detail_part1.png)
+*Figura 12.16: Detalhes de portfólio - secção principal*
 
----
+![Portfolio Details - Parte 2](./interface/portfolio_detail_part2.png)
+*Figura 12.17: Detalhes de portfólio - secção complementar*
 
-#### **12.7 Interface 6: Assets Exploration - Lista Completa**
+![Portfolio Métricas](./interface/portfolio_metricas.png)
+*Figura 12.18: Métricas detalhadas de performance de portfólio*
 
-**Localização Frontend**: `app/assets/page.tsx`
-**Componente Principal**: `AssetsPage`
+#### **12.6 Gestão de Ativos**
 
-![Assets Page - All](./interface/assets_all.png)
-*Figura 12.6: Exploração de ativos - visualização completa*
+![Assets - Todos](./interface/assets_all.png)
+*Figura 12.19: Lista completa de ativos disponíveis*
 
-**API Endpoints Utilizados:**
-```
-GET /api/v1/assets
-├── Handler: assets::list_assets() (backend/src/handlers/assets.rs:64)
-├── Database: SELECT from portfolio.Assets
-└── View: Lista completa sem filtros aplicados
-```
+![Assets - Com Filtros](./interface/assets_filter.png)
+*Figura 12.20: Interface de ativos com filtros aplicados*
 
-**Mapeamento Técnico:**
-- **Frontend**: `AssetsPage` → Lista completa de ativos disponíveis
-- **Backend**: `assets.rs:64` → query sem filtros
-- **Database**: Query direta à tabela `portfolio.Assets`
+![Asset Details](./interface/asset_details.png)
+*Figura 12.21: Página detalhada de ativo individual*
 
----
+#### **12.7 Gestão de Subscrições**
 
-#### **12.8 Interface 7: Assets Exploration - Com Filtros**
+![Subscrição - Sem Premium](./interface/subscription_none.png)
+*Figura 12.22: Interface de subscrição para utilizadores Basic*
 
-**Localização Frontend**: `app/assets/page.tsx`
-**Componente Principal**: `AssetsPage` + `AssetFilters`
+![Subscrição - Com Premium](./interface/subscription_true.png)
+*Figura 12.23: Interface de subscrição para utilizadores Premium ativos*
 
-![Assets Page - Filtered](./interface/assets_filter.png)
-*Figura 12.7: Exploração de ativos com filtros aplicados*
+#### **12.8 Análise de Risco**
 
-**API Endpoints Utilizados:**
-```
-GET /api/v1/assets?query={search}&asset_type={type}
-├── Handler: assets::list_assets() (backend/src/handlers/assets.rs:64)
-├── Database: Dynamic WHERE clauses based on query parameters
-└── Filters: Name LIKE, Symbol LIKE, AssetType = @P1
-```
+![Dashboard - Risk Overview](./interface/dashboard_risk_overview.png)
+*Figura 12.24: Dashboard de análise de risco*
 
-**Mapeamento Técnico:**
-- **Frontend**: `AssetsPage` → Search + filtering interface ativa
-- **Backend**: `assets.rs:64` → dynamic query building com filtros
-- **Database**: Parameterized queries com WHERE clauses condicionais
-
----
-
-#### **12.9 Interface 8: Asset Detail Page**
-
-**Localização Frontend**: `app/assets/[id]/page.tsx`
-**Componente Principal**: `AssetDetailPage` + `PriceChart`
-
-![Asset Detail](./interface/asset_details.png)
-*Figura 12.8: Página detalhada de ativo com histórico de preços*
-
-**API Endpoints Utilizados:**
-```
-GET /api/v1/assets/{id}/complete
-├── Handler: assets::get_complete_asset() (backend/src/handlers/assets.rs:551)
-├── Database: EXEC portfolio.sp_GetAssetComplete @AssetID
-└── View: Polymorphic asset details (Stock/Crypto/Commodity/Index)
-
-GET /api/v1/assets/{id}/price-history
-├── Handler: assets::get_asset_price_history() (backend/src/handlers/assets.rs:1032)
-├── Database: SELECT from portfolio.AssetPrices WHERE AssetID = @P1
-└── View: Historical OHLCV data for charts
-```
-
-**Mapeamento Técnico:**
-- **Frontend**: `AssetDetailPage` → asset info completa + price charts
-- **Backend**: `assets.rs:551` + `assets.rs:1032` → complete asset data
-- **Database**: `sp_GetAssetComplete` + `AssetPrices` historical data
-
----
-
-#### **12.10 Interface 9: Subscriptions Tab (Sem Premium)**
-
-**Localização Frontend**: `components/dashboard/SubscriptionsTab.tsx`
-**Componente Principal**: `SubscriptionsTab`
-
-![Subscriptions - None](./interface/subscription_none.png)
-*Figura 12.9: Gestão de subscrição - utilizador Basic*
-
-**API Endpoints Utilizados:**
-```
-GET /api/v1/users/{id}/complete
-├── Handler: users::get_user_extended() (backend/src/handlers/users.rs:127)
-├── Database: EXEC portfolio.sp_GetUserCompleteInfo @UserID
-└── Check: IsPremium = false, subscription status
-```
-
-**Mapeamento Técnico:**
-- **Frontend**: `SubscriptionsTab.tsx` → Display upgrade options for Basic users
-- **Backend**: `users.rs:127` → User subscription status check
-- **Database**: `sp_GetUserCompleteInfo` → Premium status validation
-
----
-
-#### **12.11 Interface 10: Subscriptions Tab (Com Premium)**
-
-**Localização Frontend**: `components/dashboard/SubscriptionsTab.tsx`
-**Componente Principal**: `SubscriptionsTab`
-
-![Subscriptions - Premium](./interface/subscription_true.png)
-*Figura 12.10: Gestão de subscrição - utilizador Premium ativo*
-
-**API Endpoints Utilizados:**
-```
-POST /api/v1/users/{id}/upgrade-premium
-├── Handler: users::upgrade_to_premium() (backend/src/handlers/users.rs:770)
-├── Database: EXEC portfolio.sp_UpgradeToPremium @UserID, @PaymentMethodType
-└── Updates: Users Premium fields + subscription dates
-
-GET /api/v1/users/{id}/complete
-├── Handler: users::get_user_extended() (backend/src/handlers/users.rs:127)
-├── Database: EXEC portfolio.sp_GetUserCompleteInfo @UserID
-└── Display: Premium status, dates, renewal settings
-```
-
-**Mapeamento Técnico:**
-- **Frontend**: `SubscriptionsTab.tsx` → Premium management interface
-- **Backend**: `users.rs:770` + `users.rs:127` → subscription management
-- **Database**: `sp_UpgradeToPremium` + `sp_GetUserCompleteInfo` → Premium activation/status
-
----
-![Subscriptions - Premium](./interface/portfolio_metricas.png)
+![Portfolio Risk Example](./interface/portfolio_risk_example.png)
+*Figura 12.25: Exemplo de análise de risco de portfólio*
 
