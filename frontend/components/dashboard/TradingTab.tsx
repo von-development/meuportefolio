@@ -487,10 +487,10 @@ export default function TradingTab({ userId, formatCurrency, onRefresh }: Tradin
                     variant={assetTypeFilter === type.value ? "default" : "outline"}
                     size="sm"
                     onClick={() => setAssetTypeFilter(type.value)}
-                    className={`justify-start ${
+                    className={`justify-start transition-all duration-200 ${
                       assetTypeFilter === type.value 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                        : 'border-gray-600 text-gray-300 hover:bg-gray-600'
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-blue-600 shadow-lg shadow-blue-600/25' 
+                        : 'bg-gray-800/40 border-gray-600/60 text-gray-100 hover:bg-blue-900/30 hover:border-blue-600/60 hover:text-white backdrop-blur-sm'
                     }`}
                   >
                     <Icon className="h-4 w-4 mr-2" />
@@ -723,7 +723,7 @@ export default function TradingTab({ userId, formatCurrency, onRefresh }: Tradin
                         variant="outline"
                         size="sm"
                         onClick={() => handleQuickSell(holdings.find(h => h.asset_id.toString() === selectedAsset)!, percentage)}
-                        className="border-gray-600 text-gray-300 hover:bg-gray-600"
+                        className="bg-gray-800/40 border-gray-600/60 text-gray-100 hover:bg-orange-900/30 hover:border-orange-600/60 hover:text-orange-200 backdrop-blur-sm transition-all duration-200"
                       >
                         {percentage}%
                       </Button>
@@ -960,23 +960,21 @@ export default function TradingTab({ userId, formatCurrency, onRefresh }: Tradin
                       <div className="flex gap-2 mt-3">
                         <Button
                           size="sm"
-                          variant="outline"
                           onClick={() => {
                             setSelectedAsset(holding.asset_id.toString())
                             setSellQuantity((holding.quantity_held * 0.5).toString())
                           }}
-                          className="flex-1 text-xs border-gray-600 text-gray-300 hover:bg-red-600/20"
+                          className="flex-1 text-xs bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white"
                         >
                           Vender 50%
                         </Button>
                         <Button
                           size="sm"
-                          variant="outline"
                           onClick={() => {
                             setSelectedAsset(holding.asset_id.toString())
                             setSellQuantity(holding.quantity_held.toString())
                           }}
-                          className="flex-1 text-xs border-gray-600 text-gray-300 hover:bg-red-600/20"
+                          className="flex-1 text-xs bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
                         >
                           Vender Tudo
                         </Button>

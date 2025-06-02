@@ -14,21 +14,31 @@ import {
   CheckCircle,
   DollarSign,
   Banknote,
-  Info
+  Info,
+  Plus,
+  Minus,
+  RefreshCw
 } from 'lucide-react'
 
 interface AddFundsTabProps {
-  userId: string | undefined
+  userId: string
   currentBalance: number
   onRefresh: () => void
   formatCurrency: (amount: number) => string
+  userComplete?: any
+  fetchCompleteUser?: () => Promise<void>
 }
 
-export default function AddFundsTab({ userId, currentBalance, onRefresh, formatCurrency }: AddFundsTabProps) {
+export default function AddFundsTab({ userId, currentBalance, onRefresh, formatCurrency, userComplete, fetchCompleteUser }: AddFundsTabProps) {
   const [depositAmount, setDepositAmount] = useState('')
+  const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [activeOperation, setActiveOperation] = useState<'deposit' | 'withdraw'>('deposit')
   const [isDepositing, setIsDepositing] = useState(false)
   const [depositError, setDepositError] = useState('')
   const [depositSuccess, setDepositSuccess] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   const handleDeposit = async () => {
     if (!depositAmount || parseFloat(depositAmount) <= 0) {
@@ -59,9 +69,13 @@ export default function AddFundsTab({ userId, currentBalance, onRefresh, formatC
 
       if (response.ok) {
         const result = await response.json()
-        setDepositSuccess(`Depósito de ${formatCurrency(result.amount)} realizado com sucesso! Novo saldo: ${formatCurrency(result.new_balance)}`)
+        setDepositSuccess(`Depósito de ${formatCurrency(result.amount)} adicionado com sucesso! Novo saldo: ${formatCurrency(result.new_balance)}`)
         setDepositAmount('')
-        onRefresh() // Refresh the dashboard data
+        
+        // Add delay to let user see the success message before refreshing
+        setTimeout(() => {
+          onRefresh() // Refresh the dashboard data
+        }, 2000) // 2 second delay
       } else {
         const errorData = await response.text()
         setDepositError(`Erro ao processar depósito: ${errorData}`)
@@ -74,9 +88,77 @@ export default function AddFundsTab({ userId, currentBalance, onRefresh, formatC
     }
   }
 
+  const handleWithdraw = async () => {
+    if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
+      setError('Por favor, insira um valor válido de levantamento')
+      return
+    }
+
+    if (parseFloat(withdrawAmount) > (userComplete?.account_balance || 0)) {
+      setError('Fundos insuficientes para este levantamento')
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/users/${userId}/withdraw`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(withdrawAmount),
+          description: 'Levantamento via plataforma web'
+        })
+      })
+
+      console.log('Withdraw response status:', response.status)
+      console.log('Withdraw response ok:', response.ok)
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('Withdraw result:', result)
+        
+        // Handle different possible response structures
+        const amount = result.amount || parseFloat(withdrawAmount)
+        const newBalance = result.new_balance || userComplete?.account_balance
+        
+        if (result.status === 'Success' || response.status === 200) {
+          setSuccess(`Fundos de ${formatCurrency(amount)} retirados com sucesso!${newBalance ? ` Novo saldo: ${formatCurrency(newBalance)}` : ''}`)
+        } else {
+          setSuccess(`Levantamento processado com sucesso!`)
+        }
+        
+        setWithdrawAmount('')
+        
+        // Add delay to let user see the success message before refreshing
+        setTimeout(async () => {
+          // Refresh both user data and dashboard
+          if (fetchCompleteUser) {
+            await fetchCompleteUser()
+          }
+          // Also call the main refresh function
+          onRefresh()
+        }, 2000) // 2 second delay
+      } else {
+        const errorData = await response.text()
+        console.error('Withdraw error response:', errorData)
+        setError(errorData || 'Withdrawal failed')
+      }
+    } catch (error) {
+      console.error('Withdraw network error:', error)
+      setError('Network error during withdrawal')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const clearMessages = () => {
     setDepositError('')
     setDepositSuccess('')
+    setError('')
+    setSuccess('')
   }
 
   const suggestedAmounts = [50, 100, 250, 500, 1000, 2500]
@@ -107,97 +189,196 @@ export default function AddFundsTab({ userId, currentBalance, onRefresh, formatC
       {/* Deposit Form */}
       <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
         <CardHeader>
-          <CardTitle className="text-white flex items-center">
-            <ArrowUpCircle className="h-5 w-5 mr-2" />
-            Adicionar Fundos
+          <CardTitle className="text-white flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-green-400" />
+            Fundos
           </CardTitle>
           <CardDescription className="text-gray-400">
-            Deposite fundos na sua conta para começar a investir
+            Depositar ou retirar fundos da sua conta
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Amount Input */}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="deposit-amount" className="text-white text-base font-medium">
-                Valor a Depositar
-              </Label>
-              <div className="relative mt-2">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-400 text-lg">€</span>
-                </div>
-                <Input
-                  id="deposit-amount"
-                  type="number"
-                  placeholder="0.00"
-                  value={depositAmount}
-                  onChange={(e) => {
-                    setDepositAmount(e.target.value)
-                    clearMessages()
-                  }}
-                  className="bg-gray-800 border-gray-600 text-white pl-8 text-lg h-12"
-                  min="0"
-                  step="0.01"
-                  max="100000"
-                />
-              </div>
-            </div>
-
-            {/* Suggested Amounts */}
-            <div>
-              <Label className="text-white text-sm font-medium">Valores Sugeridos</Label>
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                {suggestedAmounts.map((amount) => (
-                  <Button
-                    key={amount}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setDepositAmount(amount.toString())
-                      clearMessages()
-                    }}
-                    className="border-gray-600 text-gray-300 hover:bg-gray-600 hover:text-white"
-                  >
-                    {formatCurrency(amount)}
-                  </Button>
-                ))}
-              </div>
-            </div>
+          {/* Operation Toggle */}
+          <div className="flex rounded-lg bg-gray-800/60 p-1">
+            <Button
+              variant={activeOperation === 'deposit' ? 'default' : 'ghost'}
+              onClick={() => {
+                setActiveOperation('deposit')
+              }}
+              className={`flex-1 ${activeOperation === 'deposit' 
+                ? 'bg-blue-600 text-white' 
+                : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Depositar
+            </Button>
+            <Button
+              variant={activeOperation === 'withdraw' ? 'default' : 'ghost'}
+              onClick={() => {
+                setActiveOperation('withdraw')
+              }}
+              className={`flex-1 ${activeOperation === 'withdraw' 
+                ? 'bg-orange-600 text-white' 
+                : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              <Minus className="h-4 w-4 mr-2" />
+              Retirar
+            </Button>
           </div>
 
+          {activeOperation === 'deposit' ? (
+            <>
+              {/* Deposit Form */}
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-white text-sm font-medium">Valor a Depositar</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={depositAmount}
+                    onChange={(e) => {
+                      setDepositAmount(e.target.value)
+                      if (depositError || depositSuccess) {
+                        clearMessages()
+                      }
+                    }}
+                    placeholder="0.00"
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                  />
+                </div>
+
+                {/* Suggested Amounts */}
+                <div>
+                  <Label className="text-white text-sm font-medium">Valores Sugeridos</Label>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {suggestedAmounts.map((amount) => (
+                      <Button
+                        key={amount}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDepositAmount(amount.toString())
+                          clearMessages()
+                        }}
+                        className="bg-gray-800/60 border-gray-500/60 text-gray-100 hover:bg-blue-600/20 hover:border-blue-500/60 hover:text-blue-200 backdrop-blur-sm transition-all duration-200"
+                      >
+                        {formatCurrency(amount)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={handleDeposit} 
+                  disabled={isLoading || !depositAmount || parseFloat(depositAmount) <= 0}
+                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Depositar {depositAmount ? formatCurrency(parseFloat(depositAmount)) : 'Fundos'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Withdraw Form */}
+              <div className="space-y-4">
+                <div className="bg-blue-900/30 border border-blue-600/50 rounded-lg p-3">
+                  <p className="text-blue-200 text-sm">
+                    <span className="font-medium">Saldo Disponível:</span> {formatCurrency(userComplete?.account_balance || 0)}
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-white text-sm font-medium">Valor a Retirar</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={userComplete?.account_balance || 0}
+                    value={withdrawAmount}
+                    onChange={(e) => {
+                      setWithdrawAmount(e.target.value)
+                      if (error || success) {
+                        clearMessages()
+                      }
+                    }}
+                    placeholder="0.00"
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                  />
+                </div>
+
+                {/* Quick Withdraw Amounts */}
+                <div>
+                  <Label className="text-white text-sm font-medium">Retirada Rápida</Label>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {[25, 50, 100].map((percentage) => {
+                      const amount = (userComplete?.account_balance || 0) * (percentage / 100)
+                      return (
+                        <Button
+                          key={percentage}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setWithdrawAmount(amount.toString())
+                            clearMessages()
+                          }}
+                          className="bg-gray-800/60 border-gray-500/60 text-gray-100 hover:bg-orange-600/20 hover:border-orange-500/60 hover:text-orange-200 backdrop-blur-sm transition-all duration-200"
+                          disabled={amount <= 0}
+                        >
+                          {percentage}%
+                        </Button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={handleWithdraw} 
+                  disabled={isLoading || !withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > (userComplete?.account_balance || 0)}
+                  className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <Minus className="mr-2 h-4 w-4" />
+                      Retirar {withdrawAmount ? formatCurrency(parseFloat(withdrawAmount)) : 'Fundos'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
+
           {/* Messages */}
-          {depositError && (
+          {(depositError || error) && (
             <div className="flex items-center p-3 rounded-lg bg-red-950/50 border border-red-800/40">
               <AlertCircle className="h-5 w-5 text-red-400 mr-3 flex-shrink-0" />
-              <p className="text-red-300 text-sm">{depositError}</p>
+              <p className="text-red-300 text-sm">{depositError || error}</p>
             </div>
           )}
 
-          {depositSuccess && (
+          {(depositSuccess || success) && (
             <div className="flex items-center p-3 rounded-lg bg-green-950/50 border border-green-800/40">
               <CheckCircle className="h-5 w-5 text-green-400 mr-3 flex-shrink-0" />
-              <p className="text-green-300 text-sm">{depositSuccess}</p>
+              <p className="text-green-300 text-sm">{depositSuccess || success}</p>
             </div>
           )}
-
-          {/* Deposit Button */}
-          <Button 
-            onClick={handleDeposit}
-            disabled={isDepositing || !depositAmount || parseFloat(depositAmount) <= 0}
-            className="w-full bg-green-600 hover:bg-green-700 h-12 text-lg"
-          >
-            {isDepositing ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                A processar depósito...
-              </div>
-            ) : (
-              <>
-                <ArrowUpCircle className="h-5 w-5 mr-2" />
-                Depositar {depositAmount && formatCurrency(parseFloat(depositAmount))}
-              </>
-            )}
-          </Button>
         </CardContent>
       </Card>
 
@@ -279,7 +460,7 @@ export default function AddFundsTab({ userId, currentBalance, onRefresh, formatC
               <Badge className="bg-yellow-100 text-yellow-800">€500,000</Badge>
             </div>
             <p className="text-yellow-200 text-sm mt-3">
-              Para aumentar os seus limites, contacte o nosso suporte ou faça upgrade para Premium.
+              Para aumentar os seus limites, contacte o nosso suporte.
             </p>
           </div>
         </CardContent>

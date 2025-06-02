@@ -16,12 +16,13 @@ import {
   Activity,
   Zap,
   Star,
-  CheckCircle
+  CheckCircle,
+  RefreshCw,
+  Target
 } from 'lucide-react'
 import Link from 'next/link'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadialBarChart, RadialBar } from 'recharts'
 
-interface PortfolioRiskMetrics {
+interface PortfolioRiskSummary {
   portfolio_id: number
   volatility: number
   beta: number
@@ -33,14 +34,9 @@ interface PortfolioRiskMetrics {
   sector_concentration: any[]
   risk_score: number
   risk_level: string
-}
-
-interface UserRiskSummary {
-  user_id: string
-  overall_risk_score: number
-  portfolio_count: number
-  total_value: number
-  risk_distribution: any[]
+  portfolio_value: number
+  asset_count: number
+  last_calculated: string
   recommendations: string[]
 }
 
@@ -52,125 +48,78 @@ interface RiskAnalysisSectionProps {
 }
 
 export default function RiskAnalysisSection({ portfolioId, userId, isPremium, formatCurrency }: RiskAnalysisSectionProps) {
-  const [portfolioRisk, setPortfolioRisk] = useState<PortfolioRiskMetrics | null>(null)
-  const [userRisk, setUserRisk] = useState<UserRiskSummary | null>(null)
+  const [portfolioRisk, setPortfolioRisk] = useState<PortfolioRiskSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isUsingMockData, setIsUsingMockData] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (isPremium) {
-      fetchRiskData()
+      fetchPortfolioRiskData()
     } else {
-      // For non-premium users, also generate mock data instead of showing empty
-      setPortfolioRisk(generateMockPortfolioRisk())
-      setUserRisk(generateMockUserRisk())
-      setIsUsingMockData(true)
       setLoading(false)
     }
-  }, [portfolioId, userId, isPremium])
+  }, [portfolioId, isPremium])
 
-  const fetchRiskData = async () => {
+  const fetchPortfolioRiskData = async () => {
     try {
       setLoading(true)
+      setError('')
       
-      const [portfolioRiskRes, userRiskRes] = await Promise.all([
-        fetch(`http://localhost:8080/api/v1/risk/summary/portfolio/${portfolioId}`),
-        fetch(`http://localhost:8080/api/v1/risk/summary/user/${userId}`)
-      ])
-
-      let portfolioData = null
-      let userData = null
+      const portfolioRiskRes = await fetch(`http://localhost:8080/api/v1/risk/summary/portfolio/${portfolioId}`)
 
       if (portfolioRiskRes.ok) {
-        portfolioData = await portfolioRiskRes.json()
+        const portfolioData = await portfolioRiskRes.json()
+        setPortfolioRisk(portfolioData)
+      } else if (portfolioRiskRes.status === 404) {
+        setError('Nenhuma análise de risco disponível para este portfólio. Execute algumas transações primeiro.')
+      } else {
+        setError('Erro ao carregar análise de risco do portfólio.')
       }
-
-      if (userRiskRes.ok) {
-        userData = await userRiskRes.json()
-      }
-
-      // Generate mock data if API returns null or empty data
-      if (!portfolioData || Object.keys(portfolioData).length === 0) {
-        portfolioData = generateMockPortfolioRisk()
-        setIsUsingMockData(true)
-      }
-
-      if (!userData || Object.keys(userData).length === 0) {
-        userData = generateMockUserRisk()
-        setIsUsingMockData(true)
-      }
-
-      setPortfolioRisk(portfolioData)
-      setUserRisk(userData)
 
     } catch (error) {
-      console.error('Failed to fetch risk data:', error)
-      // On error, also generate mock data instead of showing error
-      setPortfolioRisk(generateMockPortfolioRisk())
-      setUserRisk(generateMockUserRisk())
-      setIsUsingMockData(true)
+      console.error('Failed to fetch portfolio risk data:', error)
+      setError('Erro ao carregar dados de risco do portfólio.')
     } finally {
       setLoading(false)
     }
   }
 
-  const generateMockPortfolioRisk = (): PortfolioRiskMetrics => {
-    const riskLevels = ['Low', 'Medium', 'High']
-    const randomRiskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)]
-    
-    return {
-      portfolio_id: parseInt(portfolioId),
-      volatility: 0.15 + Math.random() * 0.25, // 15% to 40%
-      beta: 0.8 + Math.random() * 0.8, // 0.8 to 1.6
-      sharpe_ratio: 0.5 + Math.random() * 1.5, // 0.5 to 2.0
-      max_drawdown: -(0.05 + Math.random() * 0.25), // -5% to -30%
-      var_95: -(0.02 + Math.random() * 0.15), // -2% to -17%
-      diversification_ratio: 0.6 + Math.random() * 0.35, // 0.6 to 0.95
-      correlation_matrix: {},
-      sector_concentration: [],
-      risk_score: 3 + Math.random() * 5, // 3 to 8
-      risk_level: randomRiskLevel
-    }
-  }
-
-  const generateMockUserRisk = (): UserRiskSummary => {
-    const recommendations = [
-      'Considere diversificar mais entre diferentes setores',
-      'Reduza a exposição a ativos de alta volatilidade',
-      'Adicione ativos de baixo risco ao seu portfólio',
-      'Rebalanceie periodicamente para manter a diversificação',
-      'Considere investir em ETFs para maior diversificação',
-      'Monitore regularmente a correlação entre os seus ativos'
-    ]
-
-    return {
-      user_id: userId,
-      overall_risk_score: 4 + Math.random() * 4, // 4 to 8
-      portfolio_count: 1,
-      total_value: 10000 + Math.random() * 40000, // €10k to €50k
-      risk_distribution: [],
-      recommendations: recommendations.slice(0, 3 + Math.floor(Math.random() * 3)) // 3-5 recommendations
-    }
-  }
-
   const getRiskColor = (riskLevel: string) => {
     switch (riskLevel?.toLowerCase()) {
-      case 'low': return 'text-green-400'
-      case 'medium': return 'text-yellow-400'
-      case 'high': return 'text-orange-400'
-      case 'very high': return 'text-red-400'
+      case 'low': 
+      case 'conservative': return 'text-green-400'
+      case 'medium': 
+      case 'moderate': return 'text-yellow-400'
+      case 'high': 
+      case 'aggressive': return 'text-orange-400'
+      case 'very high': 
+      case 'very aggressive': return 'text-red-400'
       default: return 'text-gray-400'
     }
   }
 
   const getRiskIcon = (riskLevel: string) => {
     switch (riskLevel?.toLowerCase()) {
-      case 'low': return <Shield className="h-5 w-5 text-green-400" />
-      case 'medium': return <Activity className="h-5 w-5 text-yellow-400" />
-      case 'high': return <AlertTriangle className="h-5 w-5 text-orange-400" />
-      case 'very high': return <TrendingDown className="h-5 w-5 text-red-400" />
+      case 'low': 
+      case 'conservative': return <Shield className="h-5 w-5 text-green-400" />
+      case 'medium': 
+      case 'moderate': return <Activity className="h-5 w-5 text-yellow-400" />
+      case 'high': 
+      case 'aggressive': return <AlertTriangle className="h-5 w-5 text-orange-400" />
+      case 'very high': 
+      case 'very aggressive': return <TrendingDown className="h-5 w-5 text-red-400" />
       default: return <BarChart3 className="h-5 w-5 text-gray-400" />
     }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-PT', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   // Premium Content
@@ -181,92 +130,102 @@ export default function RiskAnalysisSection({ portfolioId, userId, isPremium, fo
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="h-6 w-6 text-blue-400" />
-            <h2 className="text-2xl font-bold text-white">Análise de Risco</h2>
+            <h2 className="text-2xl font-bold text-white">Análise de Risco do Portfólio</h2>
             <Badge className="bg-yellow-100 text-yellow-800">
               <Crown className="h-3 w-3 mr-1" />
               Premium
             </Badge>
-            {isUsingMockData && (
-              <Badge variant="outline" className="border-orange-600 text-orange-400">
-                Demo Data
-              </Badge>
-            )}
           </div>
-          <Button variant="outline" size="sm" className="border-gray-600 text-gray-300">
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Relatório Completo
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={fetchPortfolioRiskData} 
+              variant="outline" 
+              size="sm" 
+              className="border-gray-600 text-gray-300"
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+            <Button variant="outline" size="sm" className="border-gray-600 text-gray-300">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Relatório Completo
+            </Button>
+          </div>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40 animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-24 bg-gray-700/50 rounded"></div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="text-center py-12">
+            <RefreshCw className="h-12 w-12 animate-spin text-blue-400 mx-auto mb-4" />
+            <p className="text-gray-400 text-lg">A carregar análise de risco do portfólio...</p>
           </div>
-        ) : (
+        ) : error ? (
+          <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
+            <CardContent className="p-8 text-center">
+              <AlertTriangle className="h-12 w-12 text-yellow-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-white mb-2">Dados de Risco Indisponíveis</h3>
+              <p className="text-gray-400 mb-6">{error}</p>
+              <Button onClick={fetchPortfolioRiskData} className="bg-blue-600 hover:bg-blue-700">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Tentar Novamente
+              </Button>
+            </CardContent>
+          </Card>
+        ) : portfolioRisk ? (
           <>
             {/* Risk Overview Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {portfolioRisk && (
-                <>
-                  <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-gray-400">Nível de Risco</span>
-                        {getRiskIcon(portfolioRisk.risk_level)}
-                      </div>
-                      <div className={`text-2xl font-bold ${getRiskColor(portfolioRisk.risk_level)}`}>
-                        {portfolioRisk.risk_level}
-                      </div>
-                      <p className="text-sm text-gray-500">Score: {portfolioRisk.risk_score?.toFixed(1)}/10</p>
-                    </CardContent>
-                  </Card>
+              <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-400">Nível de Risco</span>
+                    {getRiskIcon(portfolioRisk.risk_level)}
+                  </div>
+                  <div className={`text-2xl font-bold ${getRiskColor(portfolioRisk.risk_level)}`}>
+                    {portfolioRisk.risk_level || 'N/A'}
+                  </div>
+                  <p className="text-sm text-gray-500">Score: {portfolioRisk.risk_score?.toFixed(1) || 'N/A'}/10</p>
+                </CardContent>
+              </Card>
 
-                  <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-gray-400">Volatilidade</span>
-                        <Activity className="h-5 w-5 text-purple-400" />
-                      </div>
-                      <div className="text-2xl font-bold text-white">
-                        {`${(portfolioRisk.volatility * 100).toFixed(1)}%`}
-                      </div>
-                      <p className="text-sm text-gray-500">Anualizada</p>
-                    </CardContent>
-                  </Card>
+              <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-400">Volatilidade</span>
+                    <Activity className="h-5 w-5 text-purple-400" />
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {`${((portfolioRisk.volatility || 0) * 100).toFixed(1)}%`}
+                  </div>
+                  <p className="text-sm text-gray-500">Anualizada</p>
+                </CardContent>
+              </Card>
 
-                  <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-gray-400">Sharpe Ratio</span>
-                        <TrendingUp className="h-5 w-5 text-green-400" />
-                      </div>
-                      <div className="text-2xl font-bold text-white">
-                        {portfolioRisk.sharpe_ratio?.toFixed(2)}
-                      </div>
-                      <p className="text-sm text-gray-500">Risk-adjusted return</p>
-                    </CardContent>
-                  </Card>
+              <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-400">Sharpe Ratio</span>
+                    <TrendingUp className="h-5 w-5 text-green-400" />
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {portfolioRisk.sharpe_ratio?.toFixed(2) || 'N/A'}
+                  </div>
+                  <p className="text-sm text-gray-500">Risk-adjusted return</p>
+                </CardContent>
+              </Card>
 
-                  <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-gray-400">Max Drawdown</span>
-                        <TrendingDown className="h-5 w-5 text-red-400" />
-                      </div>
-                      <div className="text-2xl font-bold text-white">
-                        {`${(portfolioRisk.max_drawdown * 100).toFixed(1)}%`}
-                      </div>
-                      <p className="text-sm text-gray-500">Maior perda</p>
-                    </CardContent>
-                  </Card>
-                </>
-              )}
+              <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-400">Max Drawdown</span>
+                    <TrendingDown className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {`${((portfolioRisk.max_drawdown || 0) * 100).toFixed(1)}%`}
+                  </div>
+                  <p className="text-sm text-gray-500">Maior perda</p>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Detailed Analysis */}
@@ -278,28 +237,41 @@ export default function RiskAnalysisSection({ portfolioId, userId, isPremium, fo
                     <PieChart className="h-5 w-5 text-blue-400" />
                     Métricas Detalhadas
                   </CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Análise completa do risco do portfólio
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {portfolioRisk && (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Beta</span>
-                        <span className="text-white font-medium">{portfolioRisk.beta?.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">VaR (95%)</span>
-                        <span className="text-white font-medium">
-                          {`${(portfolioRisk.var_95 * 100).toFixed(1)}%`}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Diversificação</span>
-                        <span className="text-white font-medium">
-                          {portfolioRisk.diversification_ratio?.toFixed(2)}
-                        </span>
-                      </div>
-                    </>
-                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Beta</span>
+                    <span className="text-white font-medium">{portfolioRisk.beta?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">VaR (95%)</span>
+                    <span className="text-white font-medium">
+                      {`${((portfolioRisk.var_95 || 0) * 100).toFixed(1)}%`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Diversificação</span>
+                    <span className="text-white font-medium">
+                      {portfolioRisk.diversification_ratio?.toFixed(2) || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Valor do Portfólio</span>
+                    <span className="text-green-400 font-medium">
+                      {formatCurrency(portfolioRisk.portfolio_value || 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Número de Ativos</span>
+                    <span className="text-white font-medium">{portfolioRisk.asset_count || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Última Atualização</span>
+                    <span className="text-gray-300 text-sm">{portfolioRisk.last_calculated ? formatDate(portfolioRisk.last_calculated) : 'N/A'}</span>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -310,27 +282,146 @@ export default function RiskAnalysisSection({ portfolioId, userId, isPremium, fo
                     <Zap className="h-5 w-5 text-yellow-400" />
                     Recomendações
                   </CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Sugestões para otimizar o risco do portfólio
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {userRisk?.recommendations && userRisk.recommendations.length > 0 ? (
+                  {portfolioRisk.recommendations && portfolioRisk.recommendations.length > 0 ? (
                     <div className="space-y-3">
-                      {userRisk.recommendations.slice(0, 3).map((rec, index) => (
-                        <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-yellow-900/30 to-gray-800/30">
+                      {portfolioRisk.recommendations.slice(0, 4).map((rec, index) => (
+                        <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-yellow-900/30 to-gray-800/30 border border-yellow-800/40">
                           <Star className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
                           <p className="text-gray-300 text-sm">{rec}</p>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-8">
-                      <Zap className="h-12 w-12 mx-auto mb-2 text-gray-600" />
-                      <p className="text-gray-400">Nenhuma recomendação disponível</p>
+                    <div className="space-y-3">
+                      {/* Default recommendations based on risk level */}
+                      {portfolioRisk.risk_level?.toLowerCase() === 'low' && (
+                        <>
+                          <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-green-900/30 to-gray-800/30 border border-green-800/40">
+                            <Star className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-gray-300 text-sm">✅ Portfólio bem balanceado com risco baixo</p>
+                          </div>
+                          <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-blue-900/30 to-gray-800/30 border border-blue-800/40">
+                            <Star className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-gray-300 text-sm">💡 Considere adicionar alguns ativos de crescimento</p>
+                          </div>
+                        </>
+                      )}
+                      {portfolioRisk.risk_level?.toLowerCase() === 'medium' && (
+                        <>
+                          <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-yellow-900/30 to-gray-800/30 border border-yellow-800/40">
+                            <Star className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-gray-300 text-sm">⚖️ Bom equilíbrio entre risco e retorno</p>
+                          </div>
+                          <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-blue-900/30 to-gray-800/30 border border-blue-800/40">
+                            <Star className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-gray-300 text-sm">💡 Monitore correlações entre ativos</p>
+                          </div>
+                        </>
+                      )}
+                      {portfolioRisk.risk_level?.toLowerCase() === 'high' && (
+                        <>
+                          <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-orange-900/30 to-gray-800/30 border border-orange-800/40">
+                            <Star className="h-4 w-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-gray-300 text-sm">⚠️ Alto potencial, mas considere diversificar mais</p>
+                          </div>
+                          <div className="flex items-start gap-3 p-3 rounded-lg bg-gradient-to-r from-blue-900/30 to-gray-800/30 border border-blue-800/40">
+                            <Star className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-gray-300 text-sm">💡 Considere estratégias de stop-loss</p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
+
+            {/* Risk Level Explanation */}
+            <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Target className="h-5 w-5 text-purple-400" />
+                  Interpretação do Nível de Risco
+                </CardTitle>
+                <CardDescription className="text-gray-400">
+                  Entenda o que significa o nível de risco do seu portfólio
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <h4 className="text-white font-medium">Score de Risco: {portfolioRisk.risk_score?.toFixed(1) || 'N/A'}/10</h4>
+                    <div className="w-full bg-gray-700 rounded-full h-3">
+                      <div 
+                        className={`h-3 rounded-full ${
+                          (portfolioRisk.risk_score || 0) <= 3 ? 'bg-green-400' :
+                          (portfolioRisk.risk_score || 0) <= 6 ? 'bg-yellow-400' :
+                          (portfolioRisk.risk_score || 0) <= 8 ? 'bg-orange-400' : 'bg-red-400'
+                        }`}
+                        style={{ width: `${((portfolioRisk.risk_score || 0) / 10) * 100}%` }}
+                      ></div>
+                    </div>
+                    <div className="text-sm text-gray-400 space-y-1">
+                      <p><span className="text-green-400">0-3:</span> Conservador</p>
+                      <p><span className="text-yellow-400">4-6:</span> Moderado</p>
+                      <p><span className="text-orange-400">7-8:</span> Agressivo</p>
+                      <p><span className="text-red-400">9-10:</span> Muito Agressivo</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <h4 className="text-white font-medium">Principais Características</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          (portfolioRisk.volatility || 0) < 0.15 ? 'bg-green-400' :
+                          (portfolioRisk.volatility || 0) < 0.25 ? 'bg-yellow-400' : 'bg-red-400'
+                        }`}></div>
+                        <span className="text-gray-300">
+                          Volatilidade {(portfolioRisk.volatility || 0) < 0.15 ? 'baixa' : (portfolioRisk.volatility || 0) < 0.25 ? 'moderada' : 'alta'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          (portfolioRisk.diversification_ratio || 0) > 0.8 ? 'bg-green-400' :
+                          (portfolioRisk.diversification_ratio || 0) > 0.6 ? 'bg-yellow-400' : 'bg-red-400'
+                        }`}></div>
+                        <span className="text-gray-300">
+                          Diversificação {(portfolioRisk.diversification_ratio || 0) > 0.8 ? 'excelente' : (portfolioRisk.diversification_ratio || 0) > 0.6 ? 'boa' : 'limitada'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          (portfolioRisk.sharpe_ratio || 0) > 1.5 ? 'bg-green-400' :
+                          (portfolioRisk.sharpe_ratio || 0) > 0.8 ? 'bg-yellow-400' : 'bg-red-400'
+                        }`}></div>
+                        <span className="text-gray-300">
+                          Retorno ajustado ao risco {(portfolioRisk.sharpe_ratio || 0) > 1.5 ? 'excelente' : (portfolioRisk.sharpe_ratio || 0) > 0.8 ? 'bom' : 'a melhorar'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </>
+        ) : (
+          <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
+            <CardContent className="p-8 text-center">
+              <AlertTriangle className="h-12 w-12 text-yellow-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-white mb-2">Nenhum Dado Disponível</h3>
+              <p className="text-gray-400 mb-6">Não foram encontrados dados de risco para este portfólio.</p>
+              <Button onClick={fetchPortfolioRiskData} className="bg-blue-600 hover:bg-blue-700">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Tentar Novamente
+              </Button>
+            </CardContent>
+          </Card>
         )}
       </div>
     )
@@ -343,7 +434,7 @@ export default function RiskAnalysisSection({ portfolioId, userId, isPremium, fo
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="h-6 w-6 text-gray-500" />
-          <h2 className="text-2xl font-bold text-gray-400">Análise de Risco</h2>
+          <h2 className="text-2xl font-bold text-gray-400">Análise de Risco do Portfólio</h2>
           <Badge variant="outline" className="border-gray-600 text-gray-400">
             <Lock className="h-3 w-3 mr-1" />
             Premium
@@ -361,16 +452,16 @@ export default function RiskAnalysisSection({ portfolioId, userId, isPremium, fo
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">Análise de Risco Premium</h3>
             <p className="text-gray-300 mb-6 max-w-md">
-              Desbloqueie insights avançados de risco, métricas detalhadas e recomendações personalizadas
+              Desbloqueie insights avançados de risco, métricas detalhadas e recomendações personalizadas para este portfólio
             </p>
             <div className="space-y-3 mb-6">
               <div className="flex items-center justify-center gap-2 text-yellow-400">
                 <CheckCircle className="h-4 w-4" />
-                <span>Métricas de volatilidade e Sharpe ratio</span>
+                <span>Métricas específicas do portfólio</span>
               </div>
               <div className="flex items-center justify-center gap-2 text-yellow-400">
                 <CheckCircle className="h-4 w-4" />
-                <span>Análise de diversificação</span>
+                <span>Análise de volatilidade e drawdown</span>
               </div>
               <div className="flex items-center justify-center gap-2 text-yellow-400">
                 <CheckCircle className="h-4 w-4" />

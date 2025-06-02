@@ -16,7 +16,8 @@ import {
   DollarSign,
   Plus,
   CreditCard,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react'
 import Link from 'next/link'
 import Navbar from '@/components/layout/Navbar'
@@ -62,6 +63,7 @@ export default function DashboardPage() {
   const [userComplete, setUserComplete] = useState<ExtendedUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   // Portfolio aggregated data
   const [portfolioStats, setPortfolioStats] = useState({
@@ -194,10 +196,12 @@ export default function DashboardPage() {
   }
 
   const refreshDashboardData = async () => {
+    setIsRefreshing(true)
     await Promise.all([
       fetchCompleteUser(),
       fetchPortfolioStats()
     ])
+    setIsRefreshing(false)
   }
 
   const formatCurrency = (amount: number) => {
@@ -233,11 +237,6 @@ export default function DashboardPage() {
               <p className="text-gray-400 mt-1">
                 Gestão inteligente do seu portfólio de investimentos
               </p>
-              {/* Debug info */}
-              <p className="text-gray-500 text-sm mt-1">
-                Premium Status: {userComplete?.is_premium ? 'TRUE' : 'FALSE'} | 
-                Data Loaded: {userComplete ? 'YES' : 'NO'}
-              </p>
             </div>
             <div className="flex items-center gap-3">
               {userComplete?.is_premium ? (
@@ -254,15 +253,14 @@ export default function DashboardPage() {
                 onClick={refreshDashboardData}
                 size="sm" 
                 variant="outline"
-                className="border-gray-600 text-gray-300 hover:bg-gray-600"
+                className="bg-blue-900/30 border-blue-600/50 text-blue-200 hover:bg-blue-800/40 hover:border-blue-500 hover:text-white backdrop-blur-sm transition-all duration-200"
+                disabled={isRefreshing}
               >
-                🔄 Refresh
-              </Button>
-              <Button asChild size="sm" className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800">
-                <Link href="/portfolios/create">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Criar Portfólio
-                </Link>
+                {isRefreshing ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
               </Button>
             </div>
           </div>
@@ -319,32 +317,32 @@ export default function DashboardPage() {
         {/* Main Content with Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-gray-800/60 backdrop-blur-sm border border-gray-700">
-            <TabsTrigger value="overview" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="overview" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <Eye className="h-4 w-4 mr-2" />
               Visão Geral
             </TabsTrigger>
-            <TabsTrigger value="funds" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="funds" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <DollarSign className="h-4 w-4 mr-2" />
-              Adicionar Fundos
+              Fundos
             </TabsTrigger>
-            <TabsTrigger value="portfolios" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="portfolios" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <PieChart className="h-4 w-4 mr-2" />
               Portfólios
             </TabsTrigger>
-            <TabsTrigger value="trading" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="trading" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <TrendingUp className="h-4 w-4 mr-2" />
               Trading
             </TabsTrigger>
-            <TabsTrigger value="payments" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="payments" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <CreditCard className="h-4 w-4 mr-2" />
               Pagamentos
             </TabsTrigger>
-            <TabsTrigger value="subscriptions" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="subscriptions" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <Crown className="h-4 w-4 mr-2" />
               Subscrições
             </TabsTrigger>
             {userComplete?.is_premium && (
-              <TabsTrigger value="risk" className="text-gray-300 data-[state=active]:text-white">
+              <TabsTrigger value="risk" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
                 <AlertTriangle className="h-4 w-4 mr-2" />
                 Análise de Risco
               </TabsTrigger>
@@ -362,10 +360,12 @@ export default function DashboardPage() {
 
           <TabsContent value="funds">
             <AddFundsTab 
-              userId={user?.user_id}
+              userId={user?.user_id || ''}
               currentBalance={userComplete?.account_balance || 0}
               onRefresh={refreshDashboardData}
               formatCurrency={formatCurrency}
+              userComplete={userComplete}
+              fetchCompleteUser={fetchCompleteUser}
             />
           </TabsContent>
 
@@ -406,6 +406,7 @@ export default function DashboardPage() {
               <RiskAnalysisTab 
                 userId={user?.user_id}
                 formatCurrency={formatCurrency}
+                isPremium={userComplete?.is_premium}
               />
             </TabsContent>
           )}

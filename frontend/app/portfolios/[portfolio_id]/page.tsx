@@ -26,7 +26,10 @@ import {
   Shield,
   Zap,
   Settings,
-  RefreshCw
+  RefreshCw,
+  Search,
+  ArrowDownCircle,
+  X
 } from 'lucide-react'
 import Link from 'next/link'
 import Navbar from '@/components/layout/Navbar'
@@ -130,6 +133,9 @@ export default function PortfolioDetailsPage() {
   // Buy/Sell Modal states
   const [showBuyModal, setShowBuyModal] = useState(false)
   const [showSellModal, setShowSellModal] = useState(false)
+  const [showDeallocateModal, setShowDeallocateModal] = useState(false)
+  const [deallocateAmount, setDeallocateAmount] = useState('')
+  const [isDeallocating, setIsDeallocating] = useState(false)
   const [selectedAsset, setSelectedAsset] = useState<AssetHolding | null>(null)
   const [tradeQuantity, setTradeQuantity] = useState('')
   const [isTrading, setIsTrading] = useState(false)
@@ -376,6 +382,51 @@ export default function PortfolioDetailsPage() {
     }
   }
 
+  const handleDeallocateFunds = async () => {
+    if (!deallocateAmount || parseFloat(deallocateAmount) <= 0) {
+      toast.error('Por favor insira um valor válido')
+      return
+    }
+
+    if (!portfolio || parseFloat(deallocateAmount) > portfolio.current_funds) {
+      toast.error('Fundos insuficientes no portfólio')
+      return
+    }
+
+    setIsDeallocating(true)
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/users/${user?.user_id}/deallocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(deallocateAmount),
+          portfolio_id: parseInt(portfolioId)
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setShowDeallocateModal(false)
+        setDeallocateAmount('')
+        
+        toast.success(`${formatCurrency(result.amount)} desalocado com sucesso! Novo saldo da conta: ${formatCurrency(result.new_balance)}`)
+        
+        // Add delay to let user see the success message before refreshing
+        setTimeout(async () => {
+          await fetchAllData()
+        }, 2000) // 2 second delay
+      } else {
+        const errorData = await response.text()
+        toast.error(`Erro ao desalocar fundos: ${errorData}`)
+      }
+    } catch (error) {
+      console.error('Deallocation failed:', error)
+      toast.error('Erro de conexão durante a desalocação')
+    } finally {
+      setIsDeallocating(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
@@ -461,22 +512,22 @@ export default function PortfolioDetailsPage() {
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-gray-800/60 backdrop-blur-sm border border-gray-700 w-full justify-start">
-            <TabsTrigger value="overview" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="overview" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <BarChart3 className="h-4 w-4 mr-2" />
               Visão Geral
             </TabsTrigger>
-            <TabsTrigger value="holdings" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="holdings" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <PieChart className="h-4 w-4 mr-2" />
               Assets & Trading
             </TabsTrigger>
-            <TabsTrigger value="risk" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="risk" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <Shield className="h-4 w-4 mr-2" />
               Análise de Risco
               {userComplete?.is_premium && (
                 <Badge className="ml-2 bg-yellow-100 text-yellow-800 text-xs">Premium</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="settings" className="text-gray-300 data-[state=active]:text-white">
+            <TabsTrigger value="settings" className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-gray-700">
               <Settings className="h-4 w-4 mr-2" />
               Configurações
             </TabsTrigger>
@@ -503,6 +554,7 @@ export default function PortfolioDetailsPage() {
               currentFunds={portfolio.current_funds}
               formatCurrency={formatCurrency}
               onRefresh={fetchAllData}
+              userId={user?.user_id || ''}
             />
 
             {/* Holdings Management */}
@@ -510,7 +562,7 @@ export default function PortfolioDetailsPage() {
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <PieChart className="h-5 w-5 text-purple-400" />
-                  Gestão de Assets
+                  Gestão de Ativos
                 </CardTitle>
                 <CardDescription className="text-gray-400">
                   Gerir e negociar os seus ativos do portfólio {portfolio.name}
@@ -522,12 +574,24 @@ export default function PortfolioDetailsPage() {
                     <PieChart className="h-16 w-16 mx-auto mb-4 text-gray-600" />
                     <h3 className="text-xl font-semibold text-white mb-2">Nenhum ativo</h3>
                     <p className="text-gray-400 mb-6">Este portfólio ainda não tem ativos.</p>
-                    <Button asChild className="bg-blue-600 hover:bg-blue-700">
-                      <Link href="/dashboard?tab=trading">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Comprar Primeiro Ativo
-                      </Link>
-                    </Button>
+                    <div className="flex gap-3">
+                      <Button 
+                        onClick={() => router.push('/ativos')}
+                        className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white"
+                      >
+                        <Search className="h-4 w-4 mr-2" />
+                        Explorar Mais Ativos
+                      </Button>
+                      
+                      <Button 
+                        onClick={() => setShowDeallocateModal(true)}
+                        variant="outline"
+                        className="bg-orange-900/30 border-orange-600/50 text-orange-200 hover:bg-orange-800/40 hover:border-orange-500 hover:text-white backdrop-blur-sm"
+                      >
+                        <ArrowDownCircle className="h-4 w-4 mr-2" />
+                        Retirar Fundos
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -587,8 +651,7 @@ export default function PortfolioDetailsPage() {
                           </Button>
                           <Button 
                             size="sm" 
-                            variant="outline" 
-                            className="border-red-600 text-red-400 hover:bg-red-600/20"
+                            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
                             onClick={() => handleSellAsset(holding)}
                           >
                             <DollarSign className="h-4 w-4 mr-2" />
@@ -596,15 +659,13 @@ export default function PortfolioDetailsPage() {
                           </Button>
                           <Button 
                             size="sm" 
-                            variant="outline" 
-                            className="border-gray-600 text-gray-300 hover:bg-gray-600"
-                            onClick={() => {
-                              // Navigate to asset details page
-                              window.location.href = `/assets/${holding.symbol}`
-                            }}
+                            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                            asChild
                           >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Detalhes
+                            <Link href={`/assets/${holding.symbol}`}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Detalhes
+                            </Link>
                           </Button>
                         </div>
                       </div>
@@ -705,7 +766,7 @@ export default function PortfolioDetailsPage() {
                       Eliminar Portfólio
                     </Button>
                   </div>
-            </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -946,6 +1007,96 @@ export default function PortfolioDetailsPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Deallocate Funds Modal */}
+        {showDeallocateModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-xl border border-gray-700 max-w-md w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-white">Retirar Fundos do Portfólio</h3>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowDeallocateModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="bg-blue-900/30 border border-blue-600/50 rounded-lg p-3">
+                  <p className="text-blue-200 text-sm">
+                    <span className="font-medium">Fundos Disponíveis:</span> {formatCurrency(portfolio.current_funds)}
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-white text-sm font-medium">Valor a Retirar</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={portfolio.current_funds}
+                    value={deallocateAmount}
+                    onChange={(e) => setDeallocateAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                  />
+                </div>
+
+                {/* Quick Deallocate Options */}
+                <div>
+                  <Label className="text-white text-sm font-medium">Retirada Rápida</Label>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {[25, 50, 100].map((percentage) => {
+                      const amount = portfolio.current_funds * (percentage / 100)
+                      return (
+                        <Button
+                          key={percentage}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDeallocateAmount(amount.toString())}
+                          className="border-gray-600 text-gray-200 hover:bg-orange-900/30 hover:border-orange-600/60 hover:text-orange-200"
+                          disabled={amount <= 0}
+                        >
+                          {percentage}%
+                        </Button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowDeallocateModal(false)}
+                    className="flex-1 bg-gray-800/40 border-gray-600/60 text-gray-100 hover:bg-gray-700/60 hover:border-gray-500 hover:text-white"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleDeallocateFunds}
+                    disabled={isDeallocating || !deallocateAmount || parseFloat(deallocateAmount) <= 0 || parseFloat(deallocateAmount) > portfolio.current_funds}
+                    className="flex-1 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800"
+                  >
+                    {isDeallocating ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Retirando...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownCircle className="mr-2 h-4 w-4" />
+                        Retirar Fundos
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

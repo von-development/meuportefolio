@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,14 @@ import {
   CheckCircle,
   Shield,
   Calendar,
-  Info
+  Info,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  History
 } from 'lucide-react'
 
 interface ExtendedUser {
@@ -24,6 +31,17 @@ interface ExtendedUser {
   payment_method_details?: string
   payment_method_expiry?: string
   payment_method_active: boolean
+}
+
+interface FundTransaction {
+  fund_transaction_id: number
+  user_id: string
+  portfolio_id?: number
+  transaction_type: string
+  amount: number
+  balance_after: number
+  description?: string
+  created_at: string
 }
 
 interface PaymentsTabProps {
@@ -43,6 +61,9 @@ export default function PaymentsTab({ userId, userComplete, onRefresh }: Payment
     payment_method_details: userComplete?.payment_method_details || '',
     payment_method_expiry: userComplete?.payment_method_expiry || ''
   })
+
+  const [fundTransactions, setFundTransactions] = useState<FundTransaction[]>([])
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true)
 
   const handleSave = async () => {
     if (!paymentData.payment_method_details.trim()) {
@@ -119,6 +140,57 @@ export default function PaymentsTab({ userId, userComplete, onRefresh }: Payment
     return new Date(dateString).toLocaleDateString('pt-PT')
   }
 
+  const fetchFundTransactions = async () => {
+    if (!userId) return
+    
+    setIsLoadingTransactions(true)
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/users/${userId}/fund-transactions`)
+      if (response.ok) {
+        const data = await response.json()
+        setFundTransactions(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch fund transactions:', error)
+    } finally {
+      setIsLoadingTransactions(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchFundTransactions()
+  }, [userId])
+
+  const getTransactionIcon = (type: string) => {
+    switch (type) {
+      case 'Deposit': return <ArrowUpCircle className="h-4 w-4 text-green-400" />
+      case 'Withdrawal': return <ArrowDownCircle className="h-4 w-4 text-red-400" />
+      case 'Allocation': return <TrendingUp className="h-4 w-4 text-blue-400" />
+      case 'Deallocation': return <TrendingDown className="h-4 w-4 text-orange-400" />
+      default: return <Clock className="h-4 w-4 text-gray-400" />
+    }
+  }
+
+  const getTransactionLabel = (type: string) => {
+    switch (type) {
+      case 'Deposit': return 'Depósito'
+      case 'Withdrawal': return 'Levantamento'
+      case 'Allocation': return 'Alocação ao Portfólio'
+      case 'Deallocation': return 'Retirada do Portfólio'
+      case 'AssetPurchase': return 'Compra de Ativo'
+      case 'AssetSale': return 'Venda de Ativo'
+      case 'PremiumUpgrade': return 'Upgrade Premium'
+      default: return type
+    }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('pt-PT', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount)
+  }
+
   return (
     <div className="space-y-6">
       {/* Current Payment Method */}
@@ -147,11 +219,11 @@ export default function PaymentsTab({ userId, userComplete, onRefresh }: Payment
                       {isEditing ? (
                         <div className="space-y-3 mt-3">
                           <div>
-                            <Label className="text-gray-300 text-xs">Tipo</Label>
+                            <Label className="text-gray-200 text-xs font-medium">Tipo</Label>
                             <select
                               value={paymentData.payment_method_type}
                               onChange={(e) => setPaymentData({...paymentData, payment_method_type: e.target.value})}
-                              className="w-full mt-1 bg-gray-700 border-gray-600 text-white text-sm rounded-md p-2"
+                              className="w-full mt-1 bg-gray-700 border-gray-600 text-white text-sm rounded-md p-2 focus:border-blue-500"
                             >
                               <option value="IBAN">IBAN</option>
                               <option value="CreditCard">Cartão de Crédito</option>
@@ -159,13 +231,13 @@ export default function PaymentsTab({ userId, userComplete, onRefresh }: Payment
                             </select>
                           </div>
                           <div>
-                            <Label className="text-gray-300 text-xs">
+                            <Label className="text-gray-200 text-xs font-medium">
                               {paymentData.payment_method_type === 'IBAN' ? 'IBAN' : 'Número do Cartão'}
                             </Label>
                             <Input
                               value={paymentData.payment_method_details}
                               onChange={(e) => setPaymentData({...paymentData, payment_method_details: e.target.value})}
-                              className="bg-gray-700 border-gray-600 text-white text-sm mt-1"
+                              className="bg-gray-700 border-gray-600 text-white text-sm mt-1 focus:border-blue-500"
                               placeholder={paymentData.payment_method_type === 'IBAN' ? 
                                 'PT50 0000 0000 0000 0000 0000 0' : 
                                 '**** **** **** ****'
@@ -174,12 +246,12 @@ export default function PaymentsTab({ userId, userComplete, onRefresh }: Payment
                           </div>
                           {paymentData.payment_method_type !== 'IBAN' && (
                             <div>
-                              <Label className="text-gray-300 text-xs">Data de Validade (Opcional)</Label>
+                              <Label className="text-gray-200 text-xs font-medium">Data de Validade (Opcional)</Label>
                               <Input
                                 type="date"
                                 value={paymentData.payment_method_expiry}
                                 onChange={(e) => setPaymentData({...paymentData, payment_method_expiry: e.target.value})}
-                                className="bg-gray-700 border-gray-600 text-white text-sm mt-1"
+                                className="bg-gray-700 border-gray-600 text-white text-sm mt-1 focus:border-blue-500"
                               />
                             </div>
                           )}
@@ -228,7 +300,7 @@ export default function PaymentsTab({ userId, userComplete, onRefresh }: Payment
                           size="sm" 
                           variant="outline" 
                           onClick={handleCancel}
-                          className="border-gray-600 text-gray-300"
+                          className="bg-gray-800/40 border-gray-600/60 text-gray-100 hover:bg-gray-700/60 hover:border-gray-500 hover:text-white backdrop-blur-sm transition-all duration-200"
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -238,7 +310,7 @@ export default function PaymentsTab({ userId, userComplete, onRefresh }: Payment
                         size="sm" 
                         variant="outline" 
                         onClick={() => setIsEditing(true)} 
-                        className="border-gray-600 text-gray-300 hover:bg-gray-600"
+                        className="bg-blue-900/30 border-blue-600/50 text-blue-200 hover:bg-blue-800/40 hover:border-blue-500 hover:text-white backdrop-blur-sm transition-all duration-200"
                       >
                         <Edit className="h-4 w-4 mr-1" />
                         Editar
@@ -356,12 +428,91 @@ export default function PaymentsTab({ userId, userComplete, onRefresh }: Payment
                     <Button 
                       variant="outline" 
                       onClick={handleCancel}
-                      className="border-gray-600 text-gray-300 hover:bg-gray-600"
+                      className="bg-gray-800/40 border-gray-600/60 text-gray-100 hover:bg-gray-700/60 hover:border-gray-500 hover:text-white backdrop-blur-sm transition-all duration-200"
                     >
                       <X className="h-4 w-4 mr-2" />
                       Cancelar
                     </Button>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Fund Transaction History */}
+      <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <History className="h-5 w-5 text-blue-400" />
+            Histórico de Movimentos de Fundos
+          </CardTitle>
+          <CardDescription className="text-gray-400">
+            Histórico completo de depósitos, levantamentos e transferências de fundos
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingTransactions ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-blue-400 mr-3" />
+              <span className="text-gray-300">A carregar histórico...</span>
+            </div>
+          ) : fundTransactions.length === 0 ? (
+            <div className="text-center py-8">
+              <History className="h-16 w-16 mx-auto mb-4 text-gray-500" />
+              <h3 className="text-lg font-medium text-white mb-2">Nenhuma transação encontrada</h3>
+              <p className="text-gray-400 text-sm">
+                As suas transações de fundos aparecerão aqui quando realizadas
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {fundTransactions.slice(0, 10).map((transaction) => (
+                <div 
+                  key={transaction.fund_transaction_id} 
+                  className="flex items-center justify-between p-4 bg-gray-800/40 rounded-lg border border-gray-700/50"
+                >
+                  <div className="flex items-center gap-3">
+                    {getTransactionIcon(transaction.transaction_type)}
+                    <div>
+                      <p className="text-white font-medium">
+                        {getTransactionLabel(transaction.transaction_type)}
+                      </p>
+                      <p className="text-gray-400 text-sm">
+                        {formatDate(transaction.created_at)}
+                      </p>
+                      {transaction.description && (
+                        <p className="text-gray-500 text-xs mt-1">
+                          {transaction.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`font-medium ${
+                      ['Deposit', 'AssetSale', 'Deallocation'].includes(transaction.transaction_type) 
+                        ? 'text-green-400' 
+                        : 'text-red-400'
+                    }`}>
+                      {['Deposit', 'AssetSale', 'Deallocation'].includes(transaction.transaction_type) ? '+' : '-'}
+                      {formatCurrency(transaction.amount)}
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      Saldo: {formatCurrency(transaction.balance_after)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {fundTransactions.length > 10 && (
+                <div className="text-center pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={fetchFundTransactions}
+                    className="bg-gray-800/40 border-gray-600/60 text-gray-100 hover:bg-gray-700/60 hover:border-gray-500 hover:text-white"
+                  >
+                    Ver Mais Transações
+                  </Button>
                 </div>
               )}
             </div>
