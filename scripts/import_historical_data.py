@@ -146,6 +146,19 @@ class HistoricalDataImporter:
             logger.warning(f"Could not parse volume: {volume_str}")
             return 0
     
+    def parse_change_percent(self, change_str):
+        """Convert change percentage string like '0.45%' to decimal"""
+        if pd.isna(change_str) or change_str == '':
+            return None
+            
+        try:
+            # Remove % sign and convert to float
+            clean_change = str(change_str).strip().replace('%', '')
+            return float(clean_change)
+        except ValueError:
+            logger.warning(f"Could not parse change percentage: {change_str}")
+            return None
+    
     def parse_price(self, price_str):
         """Convert price string to decimal"""
         if pd.isna(price_str) or price_str == '':
@@ -299,6 +312,7 @@ class HistoricalDataImporter:
                     high_price = self.parse_price(row['High'])
                     low_price = self.parse_price(row['Low'])
                     volume = self.parse_volume_string(row['Vol.'])
+                    change_percent = self.parse_change_percent(row['Change %'])
                     
                     # Skip if essential data is missing
                     if price <= 0 or open_price <= 0:
@@ -316,8 +330,9 @@ class HistoricalDataImporter:
                             @HighPrice = ?, 
                             @LowPrice = ?, 
                             @Volume = ?,
+                            @ChangePercent = ?,
                             @UpdateCurrentPrice = 0
-                    """, asset_id, price, price_date, open_price, high_price, low_price, volume)
+                    """, asset_id, price, price_date, open_price, high_price, low_price, volume, change_percent)
                     
                     success_count += 1
                     
