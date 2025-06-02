@@ -1,13 +1,18 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { User, loginUser, logoutUser, createUser, getCurrentUser, setTokenInStorage, removeTokenFromStorage, setUserInStorage, removeUserFromStorage, LoginRequest, CreateUserRequest } from '@/lib/auth'
+import { User, loginUser, logoutUser, registerUser, getUserFromStorage, getTokenFromStorage, storeTokenAndUser, clearAuth, RegisterData } from '@/lib/auth'
+
+interface LoginRequest {
+  email: string
+  password: string
+}
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   login: (credentials: LoginRequest) => Promise<void>
-  signup: (userData: CreateUserRequest) => Promise<void>
+  signup: (userData: RegisterData) => Promise<void>
   logout: () => Promise<void>
   isAuthenticated: boolean
 }
@@ -20,10 +25,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check if user is already logged in on app load
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuth = () => {
       try {
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
+        const currentUser = getUserFromStorage()
+        const token = getTokenFromStorage()
+        
+        if (currentUser && token) {
+          setUser(currentUser)
+        } else {
+          setUser(null)
+        }
       } catch (error) {
         console.error('Auth check failed:', error)
         setUser(null)
@@ -38,11 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (credentials: LoginRequest) => {
     try {
       setLoading(true)
-      const response = await loginUser(credentials)
+      const response = await loginUser(credentials.email, credentials.password)
       
       // Store token and user data
-      setTokenInStorage(response.token)
-      setUserInStorage(response.user)
+      storeTokenAndUser(response.token, response.user)
       setUser(response.user)
     } catch (error) {
       console.error('Login failed:', error)
@@ -52,13 +62,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const signup = async (userData: CreateUserRequest) => {
+  const signup = async (userData: RegisterData) => {
     try {
       setLoading(true)
-      const newUser = await createUser(userData)
+      const response = await registerUser(userData)
       
-      // After successful signup, automatically log them in
-      await login({ email: userData.email, password: userData.password })
+      // After successful signup, store the returned token and user
+      storeTokenAndUser(response.token, response.user)
+      setUser(response.user)
     } catch (error) {
       console.error('Signup failed:', error)
       throw error
@@ -74,8 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout failed:', error)
     } finally {
       // Always clear local state, even if API call fails
-      removeTokenFromStorage()
-      removeUserFromStorage()
+      clearAuth()
       setUser(null)
     }
   }
