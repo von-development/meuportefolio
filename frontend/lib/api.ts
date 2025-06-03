@@ -130,59 +130,53 @@ export interface ApiResponse<T> {
   errors?: string[]
 }
 
-class ApiService {
-  private baseURL: string
+export const api = {
+  // Base URL from config
+  baseURL: config.api.baseURL,
 
-  constructor() {
-    this.baseURL = config.api.baseURL
-  }
-
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    try {
-      const url = `${this.baseURL}${endpoint}`
-      const configOptions: RequestInit = {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        ...options,
-      }
-
-      const response = await fetch(url, configOptions)
-      
-      // Handle different response types
-      let data: any
-      const contentType = response.headers.get('content-type')
-      
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json()
-      } else {
-        data = await response.text()
-      }
-
-      if (!response.ok) {
-        return {
-          success: false,
-          message: typeof data === 'string' ? data : (data.message || 'Erro na requisição'),
-          errors: typeof data === 'object' ? data.errors || [] : [],
-        }
-      }
-
-      return {
-        success: true,
-        data,
-      }
-    } catch (error) {
-      console.error('Erro na API:', error)
-      return {
-        success: false,
-        message: 'Erro de conexão com o servidor',
-      }
+  // Helper method to make API calls with consistent error handling
+  async fetch(endpoint: string, options?: RequestInit): Promise<Response> {
+    const url = `${this.baseURL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
+    
+    const defaultOptions: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+      ...options,
     }
-  }
-}
 
-export const apiService = new ApiService() 
+    try {
+      const response = await fetch(url, defaultOptions)
+      return response
+    } catch (error) {
+      console.error(`API call failed for ${endpoint}:`, error)
+      throw error
+    }
+  },
+
+  // Convenience methods for common HTTP verbs
+  async get(endpoint: string, options?: RequestInit): Promise<Response> {
+    return this.fetch(endpoint, { method: 'GET', ...options })
+  },
+
+  async post(endpoint: string, data?: any, options?: RequestInit): Promise<Response> {
+    return this.fetch(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+      ...options,
+    })
+  },
+
+  async put(endpoint: string, data?: any, options?: RequestInit): Promise<Response> {
+    return this.fetch(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+      ...options,
+    })
+  },
+
+  async delete(endpoint: string, options?: RequestInit): Promise<Response> {
+    return this.fetch(endpoint, { method: 'DELETE', ...options })
+  },
+} 

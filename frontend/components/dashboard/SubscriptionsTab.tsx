@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { api } from '@/lib/api'
 import { 
   Crown, 
   CreditCard, 
@@ -66,25 +67,28 @@ export default function SubscriptionsTab({ userComplete, onRefresh, formatCurren
       return
     }
 
+    // Check if user is already premium
+    if (userComplete.is_premium) {
+      setUpgradeError('Já é um utilizador Premium.')
+      return
+    }
+
     try {
       setIsUpgrading(true)
       setUpgradeError('')
       setUpgradeSuccess('')
 
-      const response = await fetch(`http://localhost:8080/api/v1/users/${userComplete.user_id}/upgrade-premium`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subscription_type: 'monthly',
-          auto_renew: true
-        }),
+      const response = await api.post(`/users/${userComplete.user_id}/upgrade-premium`, {
+        subscription_type: 'monthly',
+        auto_renew: true
       })
 
       if (response.ok) {
         setUpgradeSuccess('Upgrade para Premium realizado com sucesso! Bem-vindo ao meuPortfólio Premium!')
-        onRefresh() // Refresh user data
+        // Wait a moment before refreshing to ensure backend has processed the change
+        setTimeout(() => {
+          onRefresh()
+        }, 1000)
       } else {
         const errorData = await response.text()
         setUpgradeError(`Erro no upgrade: ${errorData}`)
@@ -107,19 +111,16 @@ export default function SubscriptionsTab({ userComplete, onRefresh, formatCurren
       setCancelError('')
       setCancelSuccess('')
 
-      const response = await fetch(`http://localhost:8080/api/v1/users/${userComplete?.user_id}/subscription`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'CANCEL'
-        }),
+      const response = await api.post(`/users/${userComplete?.user_id}/subscription`, {
+        action: 'CANCEL'
       })
 
       if (response.ok) {
         setCancelSuccess('Subscrição cancelada com sucesso. Continuará a ter acesso premium até ao final do período atual.')
-        onRefresh() // Refresh user data
+        // Wait a moment before refreshing to ensure backend has processed the change
+        setTimeout(() => {
+          onRefresh()
+        }, 1000)
       } else {
         const errorData = await response.text()
         setCancelError(`Erro ao cancelar subscrição: ${errorData}`)

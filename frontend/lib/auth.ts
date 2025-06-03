@@ -1,4 +1,5 @@
 import { config } from './config'
+import { api } from './api'
 
 export interface User {
   user_id: string
@@ -28,13 +29,7 @@ const API_BASE_URL = config.api.baseURL
 
 // Login user
 export async function loginUser(email: string, password: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE_URL}/users/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  })
+  const response = await api.post('/users/login', { email, password })
 
   if (!response.ok) {
     const error = await response.text()
@@ -46,13 +41,7 @@ export async function loginUser(email: string, password: string): Promise<LoginR
 
 // Register user
 export async function registerUser(userData: RegisterData): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE_URL}/users`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(userData),
-  })
+  const response = await api.post('/users', userData)
 
   if (!response.ok) {
     const error = await response.text()
@@ -62,15 +51,25 @@ export async function registerUser(userData: RegisterData): Promise<LoginRespons
   return response.json()
 }
 
-// Logout user
+// Logout user - improved with better error handling
 export async function logoutUser(): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/users/logout`, {
-    method: 'POST',
-    credentials: 'include', // Important for cookies
-  })
+  try {
+    const response = await api.post('/users/logout', null, {
+      credentials: 'include', // Important for cookies
+    })
 
-  if (!response.ok) {
-    throw new Error('Logout failed')
+    // Clear local auth data regardless of server response
+    // This ensures user is logged out locally even if server fails
+    clearAuth()
+
+    if (!response.ok) {
+      // Log the error but don't throw - user should still be logged out locally
+      console.warn('Server logout failed, but user logged out locally')
+    }
+  } catch (error) {
+    // Clear local auth data even if network request fails
+    clearAuth()
+    console.warn('Logout request failed, but user logged out locally:', error)
   }
 }
 
