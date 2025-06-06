@@ -23,7 +23,7 @@ import {
   Lock,
   RefreshCw
 } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts'
+import { ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie, Tooltip } from 'recharts'
 import Link from 'next/link'
 
 interface Portfolio {
@@ -199,16 +199,7 @@ export default function PortfolioOverview({
     return acc
   }, {} as Record<string, { count: number; value: number }>)
 
-  // Mock performance data (in real app, this would come from an API)
-  const performanceData = [
-    { date: '30 dias', value: totalValue * 0.95 },
-    { date: '25 dias', value: totalValue * 0.97 },
-    { date: '20 dias', value: totalValue * 0.94 },
-    { date: '15 dias', value: totalValue * 0.99 },
-    { date: '10 dias', value: totalValue * 1.02 },
-    { date: '5 dias', value: totalValue * 0.98 },
-    { date: 'Hoje', value: totalValue }
-  ]
+
 
   const getAssetTypeIcon = (type: string) => {
     switch (type?.toLowerCase()) {
@@ -309,56 +300,7 @@ export default function PortfolioOverview({
         </Card>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
-        {/* Performance Chart */}
-        <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-blue-400" />
-              Performance (30 dias)
-            </CardTitle>
-            <CardDescription className="text-gray-400">
-              Evolução do valor do portfólio
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={performanceData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#9CA3AF"
-                    fontSize={12}
-                  />
-                  <YAxis 
-                    stroke="#9CA3AF"
-                    fontSize={12}
-                    tickFormatter={(value) => `€${(value/1000).toFixed(0)}k`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1F2937', 
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#F9FAFB'
-                    }}
-                    formatter={(value: any) => [formatCurrency(value), 'Valor']}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke="#3B82F6" 
-                    strokeWidth={3}
-                    dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+
 
       {/* Portfolio Risk Metrics - Premium Feature */}
       <Card className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm border border-blue-800/40">
