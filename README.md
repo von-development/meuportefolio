@@ -25,10 +25,6 @@ O projeto está organizado em quatro componentes principais:
 - **Migração**: Scripts SQL organizados sequencialmente
 - **Funcionalidade**: Sistema completo de trading fracionário e análise de risco
 
-### Documentação e Relatórios
-- **Localização**: `docs/`
-- **Conteúdo**: Relatórios técnicos, análise de requisitos, documentação da arquitetura
-- **Screenshots**: Interfaces documentadas em `docs/interface/`
 
 ### Automação (Python)
 - **Localização**: `scripts/`
@@ -53,7 +49,7 @@ O projeto está organizado em quatro componentes principais:
 
 ### 1. Clonar o Repositório
 ```bash
-git clone https://github.com/your-username/meuportefolio.git
+git clone https://github.com/vondevelopment/meuportefolio.git
 cd meuportefolio
 ```
 
@@ -90,15 +86,6 @@ Este projeto foi desenvolvido como trabalho prático da disciplina de Bases de D
 - Criação de interfaces de utilizador modernas
 - Integração de sistemas distribuídos
 
-## Estrutura da Base de Dados
-
-O sistema implementa 13 entidades principais organizadas em grupos funcionais:
-- Gestão de utilizadores e contas
-- Portfólios e trading
-- Ativos e mercado
-- Auditoria e logs
-
-Para mais detalhes, consulte a documentação técnica em `docs/`.
 
 ## Contribuição
 
