@@ -1,5 +1,11 @@
 # meuPortfolio
 
+
+
+![Rust](https://img.shields.io/badge/Rust-black?style=flat-square&logo=rust) ![TypeScript](https://img.shields.io/badge/TypeScript-blue?style=flat-square&logo=typescript) ![Next.js](https://img.shields.io/badge/Next.js-black?style=flat-square&logo=next.js) ![Docker](https://img.shields.io/badge/Docker-blue?style=flat-square&logo=docker) ![SQL Server](https://img.shields.io/badge/SQL%20Server-red?style=flat-square&logo=microsoft-sql-server)
+
+---
+
 Sistema de gestão de portfólios de investimento desenvolvido no âmbito da disciplina de Bases de Dados da Universidade de Aveiro (2024/2025).
 
 ## Estrutura do Projeto
