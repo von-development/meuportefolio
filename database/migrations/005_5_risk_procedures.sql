@@ -1,6 +1,5 @@
 /* ============================================================
 meuPortfolio – Risk Metrics Management Procedures v2.0
-Advanced risk analytics and portfolio performance procedures
 ============================================================ */
 
 USE p6g4;

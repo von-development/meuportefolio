@@ -143,7 +143,7 @@ CREATE TABLE portfolio.IndexDetails (
 );
 
 /* ============================================================
-5. TRANSACTIONS TABLE (Enhanced)
+5. TRANSACTIONS TABLE
 ============================================================ */
 
 CREATE TABLE portfolio.Transactions (
@@ -232,3 +232,28 @@ CREATE TABLE portfolio.ApplicationLogs (
     CreatedAt DATETIME NOT NULL DEFAULT SYSDATETIME()
 );
 
+
+
+USE p6g4;
+GO
+
+-- Fix needed during migration
+IF NOT EXISTS (
+    SELECT 1
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE
+        TABLE_SCHEMA = 'portfolio'
+        AND TABLE_NAME = 'AssetPrices'
+        AND COLUMN_NAME = 'ChangePercent'
+)
+BEGIN
+-- Add ChangePercent column to AssetPrices table
+ALTER TABLE portfolio.AssetPrices
+ADD ChangePercent DECIMAL(10, 4) NULL;
+
+PRINT 'ChangePercent column added to portfolio.AssetPrices table successfully.';
+
+END ELSE
+BEGIN PRINT 'ChangePercent column already exists in portfolio.AssetPrices table.';
+
+END

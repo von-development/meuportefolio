@@ -383,7 +383,7 @@ GO
 ============================================================ */
 
 -- Get complete asset information with details
-CREATE PROCEDURE portfolio.sp_GetAssetComplete (
+CREATE OR ALTER PROCEDURE portfolio.sp_GetAssetComplete (
     @AssetID INT
 ) AS
 BEGIN
@@ -395,7 +395,7 @@ BEGIN
         RETURN;
     END
     
-    -- Basic asset info
+    -- Basic asset info (unchanged)
     SELECT 
         AssetID,
         Name,
@@ -408,7 +408,7 @@ BEGIN
     FROM portfolio.Assets 
     WHERE AssetID = @AssetID;
     
-    -- Asset-specific details based on type
+    -- Asset-specific details based on type (unchanged)
     DECLARE @AssetType NVARCHAR(20);
     SELECT @AssetType = AssetType FROM portfolio.Assets WHERE AssetID = @AssetID;
     
@@ -429,8 +429,9 @@ BEGIN
         SELECT * FROM portfolio.IndexDetails WHERE AssetID = @AssetID;
     END
     
-    -- Enhanced price history query - get all available data, ordered by date
-    -- Frontend can decide how much to show
+    -- FIXED: Enhanced price history query
+    -- BEFORE: SELECT TOP 30 ... ORDER BY AsOf DESC
+    -- AFTER:  SELECT ALL ... ORDER BY AsOf ASC (chronological)
     SELECT 
         PriceID,
         Price,
@@ -439,11 +440,11 @@ BEGIN
         HighPrice,
         LowPrice,
         Volume,
-        -- Add debug info
+        -- DEBUG: Add days ago calculation to help troubleshoot
         DATEDIFF(DAY, AsOf, GETDATE()) AS DaysAgo
     FROM portfolio.AssetPrices 
     WHERE AssetID = @AssetID
-    ORDER BY AsOf ASC;  -- Changed to ASC for chronological order
+    ORDER BY AsOf ASC;  -- CHANGED: ASC for chronological order, frontend can limit if needed
 END;
 GO
 
@@ -477,13 +478,224 @@ BEGIN
 END;
 GO
 
+CREATE PROCEDURE portfolio.sp_UpsertIndexDetails (
+    @AssetID INT,
+    @Country NVARCHAR(100),
+    @Region NVARCHAR(50),
+    @IndexType NVARCHAR(50),
+    @ComponentCount INT = NULL
+) AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        -- Validate asset exists and is an index
+        IF NOT EXISTS (
+            SELECT 1 FROM portfolio.Assets 
+            WHERE AssetID = @AssetID AND AssetType = 'Index'
+        )
+        BEGIN
+            RAISERROR('Asset not found or is not an index', 16, 1);
+            RETURN;
+        END
+        
+        -- Upsert index details
+        IF EXISTS (SELECT 1 FROM portfolio.IndexDetails WHERE AssetID = @AssetID)
+        BEGIN
+            UPDATE portfolio.IndexDetails 
+            SET 
+                Country = @Country,
+                Region = @Region,
+                IndexType = @IndexType,
+                ComponentCount = @ComponentCount
+            WHERE AssetID = @AssetID;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO portfolio.IndexDetails (AssetID, Country, Region, IndexType, ComponentCount)
+            VALUES (@AssetID, @Country, @Region, @IndexType, @ComponentCount);
+        END
+        
+        SELECT 'SUCCESS' AS Status, 'Index details updated successfully' AS Message;
+        
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
+GO
 
-PRINT 'SUMMARY OF ASSET PROCEDURES CREATED:';
-PRINT '✅ sp_ensure_asset - Create asset if doesn''t exist (v2 asset types)';
-PRINT '✅ sp_UpdateAssetPrice - Update current asset price with history';
-PRINT '✅ sp_import_asset_price - Import comprehensive price data';
-PRINT '✅ sp_UpsertStockDetails - Manage stock-specific information';
-PRINT '✅ sp_UpsertCryptoDetails - Manage cryptocurrency information';
-PRINT '✅ sp_UpsertCommodityDetails - Manage commodity information';
-PRINT '✅ sp_GetAssetComplete - Get complete asset info with details';
-PRINT '✅ sp_BulkUpdateAssetPrices - Bulk price updates via JSON'; 
+PRINT 'Specific asset procedures created successfully!';
+
+
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.procedures
+    WHERE
+        schema_id = SCHEMA_ID ('portfolio')
+        AND name = 'sp_import_asset_price'
+)
+BEGIN
+DROP PROCEDURE portfolio.sp_import_asset_price;
+
+PRINT 'Existing sp_import_asset_price procedure dropped for recreation.';
+
+END
+
+-- Recreate the stored procedure with ChangePercent parameter
+CREATE OR ALTER PROCEDURE portfolio.sp_import_asset_price
+    @AssetID INT,
+    @Price DECIMAL(18,2),
+    @PriceDate DATETIME,
+    @OpenPrice DECIMAL(18,2),
+    @HighPrice DECIMAL(18,2),
+    @LowPrice DECIMAL(18,2),
+    @Volume BIGINT,
+    @ChangePercent DECIMAL(10,4) = NULL,
+    @UpdateCurrentPrice BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Validate asset exists
+        IF NOT EXISTS (SELECT 1 FROM portfolio.Assets WHERE AssetID = @AssetID)
+        BEGIN
+            RAISERROR('Asset not found', 16, 1);
+            RETURN;
+        END
+        
+        -- Validate price data
+        IF @Price < 0 OR @OpenPrice < 0 OR @HighPrice < 0 OR @LowPrice < 0
+        BEGIN
+            RAISERROR('Prices cannot be negative', 16, 1);
+            RETURN;
+        END
+        
+        IF @HighPrice < @LowPrice
+        BEGIN
+            RAISERROR('High price cannot be less than low price', 16, 1);
+            RETURN;
+        END
+        
+        -- Update the current price if requested
+        IF @UpdateCurrentPrice = 1
+        BEGIN
+            UPDATE portfolio.Assets 
+            SET 
+                Price = @Price,
+                Volume = @Volume
+            WHERE AssetID = @AssetID;
+        END
+        
+        -- Insert historical price if not exists
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM portfolio.AssetPrices 
+            WHERE AssetID = @AssetID 
+            AND AsOf = @PriceDate
+        )
+        BEGIN
+            INSERT INTO portfolio.AssetPrices (
+                AssetID,
+                Price,
+                AsOf,
+                OpenPrice,
+                HighPrice,
+                LowPrice,
+                Volume,
+                ChangePercent
+            )
+            VALUES (
+                @AssetID,
+                @Price,
+                @PriceDate,
+                @OpenPrice,
+                @HighPrice,
+                @LowPrice,
+                @Volume,
+                @ChangePercent
+            );
+        END
+        ELSE
+        BEGIN
+            -- Update existing price record
+            UPDATE portfolio.AssetPrices 
+            SET 
+                Price = @Price,
+                OpenPrice = @OpenPrice,
+                HighPrice = @HighPrice,
+                LowPrice = @LowPrice,
+                Volume = @Volume,
+                ChangePercent = @ChangePercent
+            WHERE AssetID = @AssetID AND AsOf = @PriceDate;
+        END
+        
+        COMMIT TRANSACTION;
+        
+        SELECT 'SUCCESS' AS Status, 'Price data imported successfully' AS Message;
+        RETURN 0;
+        
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+        RETURN 1;
+    END CATCH
+END;
+
+USE p6g4;
+GO
+
+-- Create or update index details
+CREATE PROCEDURE portfolio.sp_UpsertIndexDetails (
+    @AssetID INT,
+    @Country NVARCHAR(100),
+    @Region NVARCHAR(50),
+    @IndexType NVARCHAR(50),
+    @ComponentCount INT = NULL
+) AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        -- Validate asset exists and is an index
+        IF NOT EXISTS (
+            SELECT 1 FROM portfolio.Assets 
+            WHERE AssetID = @AssetID AND AssetType = 'Index'
+        )
+        BEGIN
+            RAISERROR('Asset not found or is not an index', 16, 1);
+            RETURN;
+        END
+        
+        -- Upsert index details
+        IF EXISTS (SELECT 1 FROM portfolio.IndexDetails WHERE AssetID = @AssetID)
+        BEGIN
+            UPDATE portfolio.IndexDetails 
+            SET 
+                Country = @Country,
+                Region = @Region,
+                IndexType = @IndexType,
+                ComponentCount = @ComponentCount
+            WHERE AssetID = @AssetID;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO portfolio.IndexDetails (AssetID, Country, Region, IndexType, ComponentCount)
+            VALUES (@AssetID, @Country, @Region, @IndexType, @ComponentCount);
+        END
+        
+        SELECT 'SUCCESS' AS Status, 'Index details updated successfully' AS Message;
+        
+    END TRY
+    BEGIN CATCH
+        THROW;
+    END CATCH
+END;
+GO
+
+PRINT 'Index management procedures created successfully!';
